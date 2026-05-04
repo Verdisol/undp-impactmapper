@@ -15,9 +15,7 @@ from typing import Optional, List, Dict
 import asyncpg
 from contextlib import asynccontextmanager
 
-# ============================================
-# FIX: Use /tmp for writable storage on Vercel
-# ============================================
+# ========== FIX: USE /tmp FOR WRITABLE STORAGE ON VERCEL ==========
 PHOTOS_DIR = "/tmp/photos"
 EXPORTS_DIR = "/tmp/exports"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
@@ -25,7 +23,6 @@ os.makedirs(EXPORTS_DIR, exist_ok=True)
 
 security = HTTPBasic()
 
-# Database connection pool
 db_pool = None
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -102,9 +99,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================
-# WEBSOCKET MANAGER
-# ============================================
+# ========== WEBSOCKET MANAGER ==========
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[WebSocket, Dict] = {}
@@ -186,9 +181,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ============================================
-# OSM BUILDING LOOKUP
-# ============================================
+# ========== OSM BUILDING LOOKUP ==========
 def get_building_at_location(lat: float, lng: float):
     try:
         overpass_url = "https://overpass-api.de/api/interpreter"
@@ -219,9 +212,7 @@ def get_building_at_location(lat: float, lng: float):
         print(f"OSM lookup error: {e}")
     return None
 
-# ============================================
-# ASYNC DATABASE FUNCTIONS
-# ============================================
+# ========== DATABASE FUNCTIONS ==========
 async def save_report(report_uuid: str, building_id: str, building_osm_id: str, building_name: str, building_address: str,
                 damage_level: str, lat: float, lng: float, location_text: str, photo_path: str,
                 infrastructure_type: str, crisis_nature: str, debris: str, notes: str, username: str, synced: int = 1, sms_number: str = ""):
@@ -261,9 +252,7 @@ async def update_user_points(username: str, points_increment: int = 10):
     async with db_pool.acquire() as conn:
         await conn.execute("UPDATE users SET points = points + $1, verified_reports = verified_reports + 1 WHERE username = $2", points_increment, username)
 
-# ============================================
-# AUTHENTICATION
-# ============================================
+# ========== AUTHENTICATION ==========
 async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow("SELECT password_hash, role, avatar, color, points, badge_level FROM users WHERE username = $1", credentials.username)
@@ -284,9 +273,7 @@ def require_reporter(current_user: dict = Depends(verify_user)):
         raise HTTPException(status_code=403, detail="Reporter access required")
     return current_user
 
-# ============================================
-# 6 LANGUAGES (full dictionary)
-# ============================================
+# ========== LANGUAGES ==========
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "subtitle": "Unified Command Center | Analytics", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
     "es": {"name": "Español", "flag": "🇪🇸", "subtitle": "Centro de Mando Unificado | Analíticas", "report_damage": "Reportar Daños", "damage_level": "Nivel de Daño", "minimal": "Daño Mínimo", "partial": "Daño Parcial", "complete": "Destruido", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Gobierno", "utility": "Utilidad", "transport": "Transporte", "community": "Comunitario", "public": "Público", "crisis": "Crisis", "earthquake": "Terremoto", "flood": "Inundación", "tsunami": "Tsunami", "hurricane": "Huracán", "wildfire": "Incendio", "explosion": "Explosión", "conflict": "Conflicto", "debris": "¿Escombros?", "yes": "Sí", "no": "No", "submit": "Enviar", "gps_location": "Usar GPS", "building_name": "Nombre", "photo": "Foto", "notes": "Notas", "recent_reports": "Reportes", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntarios", "rescue_teams": "Rescate", "online_users": "En línea", "leaderboard": "Clasificación", "chat": "Chat", "type_message": "Escribe...", "send": "Enviar", "click_building": "🏢 ¡Haga clic en cualquier edificio!", "total_reports": "Total", "today_reports": "Hoy", "pending_sync": "Pendiente", "logout": "Salir", "sync_now": "Sincronizar", "sms_report": "Reporte SMS", "sms_placeholder": "Formato: DAÑO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Mando", "analytics": "Analíticas"},
@@ -296,9 +283,7 @@ LANGUAGES = {
     "zh": {"name": "中文", "flag": "🇨🇳", "subtitle": "统一指挥中心 | 分析", "report_damage": "报告损坏", "damage_level": "损坏程度", "minimal": "轻微", "partial": "部分", "complete": "完全", "infrastructure": "类型", "residential": "住宅", "commercial": "商业", "government": "政府", "utility": "公用", "transport": "交通", "community": "社区", "public": "公共", "crisis": "危机类型", "earthquake": "地震", "flood": "洪水", "tsunami": "海啸", "hurricane": "飓风", "wildfire": "野火", "explosion": "爆炸", "conflict": "冲突", "debris": "碎片？", "yes": "是", "no": "否", "submit": "提交", "gps_location": "我的位置", "building_name": "建筑名称", "photo": "照片", "notes": "备注", "recent_reports": "最近报告", "export_data": "导出数据", "export_csv": "导出CSV", "export_geojson": "导出GeoJSON", "active_volunteers": "志愿者", "rescue_teams": "救援队", "online_users": "在线", "leaderboard": "排行榜", "chat": "聊天", "type_message": "输入消息...", "send": "发送", "click_building": "🏢 点击地图上的建筑物！", "total_reports": "报告总数", "today_reports": "今日", "pending_sync": "待同步", "logout": "退出", "sync_now": "立即同步", "sms_report": "短信报告", "sms_placeholder": "格式: 损坏 纬度 经度", "sms_send": "发送短信", "command_center": "指挥中心", "analytics": "分析"}
 }
 
-# ============================================
-# API ENDPOINTS
-# ============================================
+# ========== API ENDPOINTS ==========
 @app.get("/")
 async def login_page():
     return HTMLResponse(LOGIN_HTML)
@@ -487,7 +472,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow("SELECT role, avatar, color, points, badge_level FROM users WHERE username = $1", username)
         if not user:
-            await websocket.close()
+            await websocket.close(code=1008)
             return
     user_info = {"username": username, "role": user[0], "avatar": user[1], "color": user[2], "points": user[3], "badge": user[4]}
     await manager.connect(websocket, user_info)
@@ -502,10 +487,11 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
 
-# ============================================
-# LOGIN HTML (with dynamic year & OSM tile fix)
-# ============================================
+# ========== LOGIN HTML (dynamic year) ==========
 LOGIN_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -770,9 +756,7 @@ LOGIN_HTML = """
 </html>
 """
 
-# ============================================
-# UNIFIED DASHBOARD HTML (with OSM tiles, chat, dynamic year, language)
-# ============================================
+# ========== UNIFIED DASHBOARD HTML (working chat, active users, clickable pending/urgent, live leaderboard) ==========
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -790,7 +774,6 @@ UNIFIED_DASHBOARD_HTML = """
         body { font-family: 'Inter', sans-serif; background: #121212; color: #e0e0e0; overflow: hidden; }
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
-        
         :root {
             --bg-dark: #121212;
             --bg-card: #1e1e1e;
@@ -802,10 +785,7 @@ UNIFIED_DASHBOARD_HTML = """
             --danger: #e74c3c;
             --warning: #f39c12;
             --info: #3498db;
-            --bottle-green: #1a472a;
-            --birds-eye-grey: #2a2a2a;
         }
-        
         .tabs-container {
             background: var(--bg-card);
             padding: 0 24px;
@@ -822,27 +802,11 @@ UNIFIED_DASHBOARD_HTML = """
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            position: relative;
-            width: auto;
-            margin: 0;
         }
-        .tab-btn:hover {
-            color: var(--primary);
-            background: var(--primary-muted);
-            transform: translateY(-2px);
-        }
-        .tab-btn.active {
-            color: var(--primary);
-            border-bottom: 2px solid var(--primary);
-        }
-        .tab-content {
-            display: none;
-            height: calc(100vh - 130px);
-        }
-        .tab-content.active {
-            display: block;
-        }
-        
+        .tab-btn:hover { color: var(--primary); background: var(--primary-muted); transform: translateY(-2px); }
+        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+        .tab-content { display: none; height: calc(100vh - 130px); }
+        .tab-content.active { display: block; }
         .system-bar {
             background: #1a472a;
             padding: 12px 24px;
@@ -871,7 +835,6 @@ UNIFIED_DASHBOARD_HTML = """
             border-radius: 8px;
             cursor: pointer;
             font-size: 0.7rem;
-            transition: all 0.3s ease;
         }
         .lang-dropdown:hover { background: rgba(255,255,255,0.25); }
         .status-badge {
@@ -885,7 +848,7 @@ UNIFIED_DASHBOARD_HTML = """
             background: rgba(0,0,0,0.3);
         }
         .status-online { color: #2ecc71; }
-        .sync-btn {
+        .sync-btn, .logout-btn {
             background: rgba(255,255,255,0.15);
             border: none;
             padding: 5px 10px;
@@ -895,19 +858,7 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .sync-btn:hover { background: rgba(255,255,255,0.25); }
-        .logout-btn {
-            background: rgba(231,76,60,0.3);
-            border: none;
-            padding: 5px 10px;
-            border-radius: 8px;
-            color: white;
-            text-decoration: none;
-            font-size: 0.65rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .logout-btn:hover { background: rgba(231,76,60,0.5); }
+        .logout-btn { background: rgba(231,76,60,0.3); }
         .role-badge {
             background: rgba(0,0,0,0.3);
             color: #2ecc71;
@@ -916,7 +867,6 @@ UNIFIED_DASHBOARD_HTML = """
             font-size: 0.65rem;
             font-weight: 600;
         }
-        
         .kpi-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -932,90 +882,35 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .kpi-card:hover {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-            box-shadow: 0 0 15px rgba(46,204,113,0.6);
-            animation: greenGlow 0.8s infinite alternate;
-        }
-        @keyframes greenGlow {
-            0% { box-shadow: 0 0 5px rgba(46,204,113,0.4); }
-            100% { box-shadow: 0 0 20px rgba(46,204,113,0.9); }
-        }
+        .kpi-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 15px rgba(46,204,113,0.6); }
         .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .kpi-header span { font-size: 0.6rem; color: #a0a0a0; text-transform: uppercase; }
-        .kpi-icon { font-size: 1rem; opacity: 0.7; }
         .kpi-value { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
-        .kpi-value.critical { color: #e74c3c; animation: blink 1s infinite; }
         .kpi-value.warning { color: #f39c12; }
-        .kpi-value.stable { color: #2ecc71; }
         .progress-bar { height: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 8px; }
         .progress-fill { height: 100%; background: var(--primary); border-radius: 2px; }
         .pill-group { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
         .pill { padding: 2px 6px; border-radius: 15px; font-size: 0.55rem; font-weight: 500; }
-        .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
-        .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
-        
-        .main-layout {
-            display: flex;
-            height: calc(100% - 60px);
-        }
-        .sidebar {
-            width: 420px;
-            background: var(--bg-sidebar);
-            overflow-y: auto;
-            padding: 15px;
-            border-right: 1px solid var(--border-color);
-        }
-        .right-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .map-container { flex: 1; position: relative; min-height: 300px; }
+        .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
+        .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
+        .main-layout { display: flex; height: calc(100% - 60px); }
+        .sidebar { width: 420px; background: var(--bg-sidebar); overflow-y: auto; padding: 15px; border-right: 1px solid var(--border-color); }
+        .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .map-container { flex: 1; position: relative; }
         #map { height: 100%; width: 100%; }
-        
         .charts-section {
             background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(5px);
             padding: 15px;
             margin: 10px;
             border-radius: 12px;
-            border: 1px solid rgba(0,0,0,0.1);
         }
-        .charts-title {
-            font-size: 1rem;
-            font-weight: 700;
-            color: #1a1a1a;
-            margin-bottom: 15px;
-            text-align: center;
-            font-family: 'Arial Black', sans-serif;
-        }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
-        .chart-container {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .chart-container h4 {
-            text-align: center;
-            margin-bottom: 10px;
-            color: #1a1a1a;
-            font-family: 'Arial Black', sans-serif;
-            font-size: 0.8rem;
-        }
-        canvas {
-            max-height: 200px;
-            width: 100%;
-        }
-        
+        .charts-title { font-size: 1rem; font-weight: 700; color: #1a1a1a; margin-bottom: 15px; text-align: center; }
+        .charts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 10px; padding: 15px; }
+        .chart-container h4 { text-align: center; margin-bottom: 10px; color: #1a1a1a; font-size: 0.8rem; }
+        canvas { max-height: 200px; width: 100%; }
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
@@ -1023,24 +918,8 @@ UNIFIED_DASHBOARD_HTML = """
             padding: 15px;
             margin-bottom: 15px;
             border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.3s ease;
         }
-        .card:hover {
-            background: rgba(42, 42, 42, 0.95);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-        .card h3 {
-            color: #2ecc71;
-            margin-bottom: 12px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .card label, .card p { color: #e0e0e0; }
-        
+        .card h3 { color: #2ecc71; margin-bottom: 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
         input, select, textarea {
             width: 100%;
             padding: 8px;
@@ -1050,12 +929,6 @@ UNIFIED_DASHBOARD_HTML = """
             border-radius: 8px;
             color: white;
             font-size: 0.75rem;
-            transition: all 0.3s ease;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #2ecc71;
-            box-shadow: 0 0 0 2px rgba(46,204,113,0.2);
         }
         button {
             background: linear-gradient(135deg, #1a472a, #0d2a1a);
@@ -1068,11 +941,8 @@ UNIFIED_DASHBOARD_HTML = """
             width: 100%;
             margin-top: 6px;
             font-size: 0.75rem;
-            transition: all 0.3s ease;
         }
-        button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(46,204,113,0.4); }
         .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
-        
         .reports-list { max-height: 250px; overflow-y: auto; }
         .report-item {
             background: #1a1a1a;
@@ -1081,21 +951,14 @@ UNIFIED_DASHBOARD_HTML = """
             border-radius: 8px;
             border-left: 3px solid #2ecc71;
             cursor: pointer;
-            transition: all 0.3s ease;
-            color: #e0e0e0;
             font-size: 0.7rem;
         }
-        .report-item:hover { background: #2a2a2a; transform: translateX(-3px); }
         .report-item.severity-critical { border-left-color: #e74c3c; }
         .report-item.severity-high { border-left-color: #f39c12; }
-        .damage-badge { display: inline-block; padding: 2px 6px; border-radius: 15px; font-size: 0.6rem; font-weight: 600; margin-left: 5px; }
+        .damage-badge { display: inline-block; padding: 2px 6px; border-radius: 15px; font-size: 0.6rem; margin-left: 5px; }
         .badge-minimal { background: rgba(46,204,113,0.2); color: #2ecc71; }
         .badge-partial { background: rgba(243,156,18,0.2); color: #f39c12; }
         .badge-complete { background: rgba(231,76,60,0.2); color: #e74c3c; }
-        .pending-badge { background: rgba(243,156,18,0.2); padding: 2px 6px; border-radius: 15px; font-size: 0.55rem; margin-left: 5px; color: #f39c12; }
-        
-        .photo-preview { margin-top: 8px; text-align: center; }
-        .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
         .building-info {
             background: rgba(46,204,113,0.1);
             padding: 8px;
@@ -1107,38 +970,15 @@ UNIFIED_DASHBOARD_HTML = """
             border: 1px solid rgba(46,204,113,0.3);
             color: #2ecc71;
         }
-        .sms-card {
-            background: rgba(46,204,113,0.08);
-            padding: 8px;
-            border-radius: 8px;
-            margin-top: 8px;
-        }
-        
-        .chat-message {
-            padding: 6px 10px;
-            border-radius: 10px;
-            font-size: 0.65rem;
-            max-width: 85%;
-        }
-        .chat-message.own {
-            background: rgba(255, 255, 255, 0.9);
-            align-self: flex-end;
-            border-left: 2px solid #2ecc71;
-            color: #1a1a1a;
-        }
-        .chat-message.other {
-            background: rgba(240, 240, 240, 0.9);
-            align-self: flex-start;
-            color: #1a1a1a;
-        }
-        
+        .sms-card { background: rgba(46,204,113,0.08); padding: 8px; border-radius: 8px; margin-top: 8px; }
+        .photo-preview { margin-top: 8px; text-align: center; }
+        .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
         .presence-panel, .chat-panel, .leaderboard-panel {
             position: fixed;
             background: rgba(30,30,30,0.95);
             backdrop-filter: blur(12px);
             border-radius: 10px;
             z-index: 1000;
-            transition: all 0.3s ease;
         }
         .presence-panel { bottom: 15px; right: 15px; width: 220px; border: 1px solid rgba(46,204,113,0.2); }
         .chat-panel { bottom: 15px; left: 15px; width: 260px; border: 1px solid rgba(52,152,219,0.2); }
@@ -1166,57 +1006,42 @@ UNIFIED_DASHBOARD_HTML = """
             background: rgba(255,255,255,0.03);
             font-size: 0.65rem;
             cursor: pointer;
-            transition: all 0.3s ease;
         }
-        .presence-user:hover, .leaderboard-item:hover { background: rgba(46,204,113,0.15); transform: translateX(-2px); }
+        .presence-user:hover, .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
         .online-dot { width: 6px; height: 6px; border-radius: 50%; background: #2ecc71; margin-left: auto; animation: pulse 2s infinite; }
         .chat-messages { height: 180px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+        .chat-message { padding: 6px 10px; border-radius: 10px; font-size: 0.65rem; max-width: 85%; }
+        .chat-message.own { background: rgba(255, 255, 255, 0.9); align-self: flex-end; border-left: 2px solid #2ecc71; color: #1a1a1a; }
+        .chat-message.other { background: rgba(240, 240, 240, 0.9); align-self: flex-start; color: #1a1a1a; }
         .chat-input-area { display: flex; padding: 8px; gap: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
-        .chat-input-area input { flex: 1; margin: 0; padding: 6px 8px; font-size: 0.65rem; background: #2a2a2a; }
+        .chat-input-area input { flex: 1; margin: 0; padding: 6px 8px; background: #2a2a2a; }
         .chat-input-area button { width: auto; padding: 6px 12px; margin: 0; }
         .rank { width: 25px; font-weight: 700; color: #f39c12; }
-        
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
-        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-        
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #1e1e1e; }
-        ::-webkit-scrollbar-thumb { background: #2ecc71; border-radius: 2px; }
-        
         @media (max-width: 1000px) {
             .sidebar { width: 100%; max-height: 40vh; }
             .right-panel { height: 60vh; }
-            .charts-grid { grid-template-columns: 1fr; gap: 10px; }
-            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid { grid-template-columns: 1fr; }
+            .kpi-row { grid-template-columns: repeat(2,1fr); }
             .leaderboard-panel { right: 230px; }
-            .brand-center h1 { font-size: 1rem; }
-            .brand-left, .controls-right { width: auto; }
         }
     </style>
 </head>
 <body>
 <div class="system-bar">
     <div class="brand-left"></div>
-    <div class="brand-center">
-        <h1>🌍 UNDP <span>ImpactMapper</span></h1>
-        <p>Analytics Command Center | Live Intelligence</p>
-    </div>
+    <div class="brand-center"><h1>🌍 UNDP <span>ImpactMapper</span></h1><p>Analytics Command Center | Live Intelligence</p></div>
     <div class="controls-right">
         <select id="languageSelect" class="lang-dropdown">
-            <option value="en">🇬🇧 English</option>
-            <option value="es">🇪🇸 Español</option>
-            <option value="fr">🇫🇷 Français</option>
-            <option value="pt">🇵🇹 Português</option>
-            <option value="ar">🇸🇦 العربية</option>
-            <option value="zh">🇨🇳 中文</option>
+            <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
+            <option value="pt">🇵🇹 Português</option><option value="ar">🇸🇦 العربية</option><option value="zh">🇨🇳 中文</option>
         </select>
-        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size: 5px;"></i> Online</div>
+        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
         <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 </div>
-
 <div class="tabs-container">
     <button class="tab-btn active" onclick="switchTab('command')" id="tabCommandBtn"><i class="fas fa-map-marked-alt"></i> Command Center</button>
     <button class="tab-btn" onclick="switchTab('analytics')" id="tabAnalyticsBtn" style="display:none;"><i class="fas fa-chart-line"></i> Analytics Dashboard</button>
@@ -1224,16 +1049,15 @@ UNIFIED_DASHBOARD_HTML = """
 
 <div id="commandTab" class="tab-content active">
     <div class="kpi-row">
-        <div class="kpi-card"><div class="kpi-header"><span>Active Cases</span><i class="fas fa-chart-line kpi-icon"></i></div><div class="kpi-value" id="activeCases">0</div><div class="progress-bar"><div class="progress-fill" id="capacityBar" style="width: 0%;"></div></div><div class="pill-group"><span class="pill pill-red">Critical: <span id="criticalCount">0</span></span><span class="pill pill-yellow">High: <span id="highCount">0</span></span></div></div>
-        <div class="kpi-card"><div class="kpi-header"><span>Resources Deployed</span><i class="fas fa-truck-medical kpi-icon"></i></div><div class="kpi-value" id="resourcesDeployed">0</div><div class="progress-bar"><div class="progress-fill" id="resourceBar" style="width: 0%;"></div></div><div class="pill-group"><span class="pill pill-green">Deployed: <span id="deployedCount">0</span></span><span class="pill pill-grey">Standby: <span id="standbyCount">0</span></span></div></div>
+        <div class="kpi-card"><div class="kpi-header"><span>Active Cases</span><i class="fas fa-chart-line kpi-icon"></i></div><div class="kpi-value" id="activeCases">0</div><div class="progress-bar"><div class="progress-fill" id="capacityBar" style="width:0%"></div></div><div class="pill-group"><span class="pill pill-red">Critical: <span id="criticalCount">0</span></span><span class="pill pill-yellow">High: <span id="highCount">0</span></span></div></div>
+        <div class="kpi-card"><div class="kpi-header"><span>Resources Deployed</span><i class="fas fa-truck-medical kpi-icon"></i></div><div class="kpi-value" id="resourcesDeployed">0</div><div class="progress-bar"><div class="progress-fill" id="resourceBar" style="width:0%"></div></div><div class="pill-group"><span class="pill pill-green">Deployed: <span id="deployedCount">0</span></span><span class="pill pill-grey">Standby: <span id="standbyCount">0</span></span></div></div>
         <div class="kpi-card"><div class="kpi-header"><span>Volunteers</span><i class="fas fa-users kpi-icon"></i></div><div class="kpi-value" id="totalVolunteers">0</div><div class="pill-group"><span class="pill pill-green">Active: <span id="activeVolunteersCount">0</span></span><span class="pill pill-yellow">Standby: <span id="standbyVolunteers">0</span></span><span class="pill pill-grey">Offline: <span id="offlineVolunteers">0</span></span></div></div>
-        <div class="kpi-card"><div class="kpi-header"><span>Pending Tasks</span><i class="fas fa-tasks kpi-icon"></i></div><div class="kpi-value warning" id="pendingTasks">0</div><div class="pill-group"><span class="pill pill-red">Urgent: <span id="urgentTasks">0</span></span></div></div>
+        <div class="kpi-card" id="pendingTasksCard"><div class="kpi-header"><span>Pending Tasks</span><i class="fas fa-tasks kpi-icon"></i></div><div class="kpi-value warning" id="pendingTasks">0</div><div class="pill-group"><span class="pill pill-red">Urgent: <span id="urgentTasks">0</span></span></div></div>
     </div>
-    
     <div class="main-layout">
         <div class="sidebar">
             <div class="card"><h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
-            <p id="clickHint" style="font-size:0.65rem; color:#2ecc71; margin-bottom:8px;">🏢 Click on any building on the map to select it!</p>
+            <p id="clickHint" style="font-size:0.65rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
             <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
             <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
             <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
@@ -1246,55 +1070,44 @@ UNIFIED_DASHBOARD_HTML = """
             <input type="file" id="photo" accept="image/*" capture="environment"><div id="photoPreview" class="photo-preview"></div>
             <button id="submitBtn" onclick="submitReport()"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
             <div id="submitStatus" style="margin-top:8px; font-size:0.65rem;"></div></div>
-            
             <div class="card"><h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
             <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG (e.g., collapsed 28.6139 77.2090)">
             <input type="text" id="smsNumber" placeholder="Your Phone Number (optional)">
             <button onclick="sendSMSReport()"><i class="fas fa-envelope"></i> <span id="smsSendLabel">Send SMS Report</span></button></div>
             <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
-            
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
-            
             <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
-            <div style="display: flex; gap: 8px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">Export CSV</span></button>
+            <div style="display:flex; gap:8px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">Export CSV</span></button>
             <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">Export GeoJSON</span></button></div></div>
         </div>
-        
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
-            
-            <div class="charts-section">
-                <div class="charts-title">📊 DAMAGE ANALYTICS DASHBOARD</div>
-                <div class="charts-grid">
-                    <div class="chart-container"><h4>🥧 Damage Distribution (Pie Chart)</h4><canvas id="pieChart"></canvas></div>
-                    <div class="chart-container"><h4>📊 Damage by Infrastructure (Bar Chart)</h4><canvas id="barChart"></canvas></div>
-                    <div class="chart-container"><h4>📈 Damage Trend (Line Chart)</h4><canvas id="lineChart"></canvas></div>
-                </div>
-            </div>
+            <div class="charts-section"><div class="charts-title">📊 DAMAGE ANALYTICS DASHBOARD</div>
+            <div class="charts-grid">
+                <div class="chart-container"><h4>🥧 Damage Distribution (Pie)</h4><canvas id="pieChart"></canvas></div>
+                <div class="chart-container"><h4>📊 Damage by Infrastructure</h4><canvas id="barChart"></canvas></div>
+                <div class="chart-container"><h4>📈 Damage Trend (Line)</h4><canvas id="lineChart"></canvas></div>
+            </div></div>
         </div>
     </div>
 </div>
 
 <div id="analyticsTab" class="tab-content">
-    <div class="analytics-container" style="padding: 15px 20px; overflow-y: auto; height: 100%;">
-        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;" id="statsGrid">
-            <div class="stat-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><div class="stat-value" id="totalReports" style="font-size: 1.8rem; font-weight: 800; color: #2ecc71;">-</div><div class="stat-label" style="font-size: 0.7rem; color: #a0a0a0;">Total Reports</div></div>
-            <div class="stat-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><div class="stat-value" id="totalUsers" style="font-size: 1.8rem; font-weight: 800; color: #2ecc71;">-</div><div class="stat-label" style="font-size: 0.7rem; color: #a0a0a0;">Active Users</div></div>
-            <div class="stat-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><div class="stat-value" id="avgResponse" style="font-size: 1.8rem; font-weight: 800; color: #2ecc71;">-</div><div class="stat-label" style="font-size: 0.7rem; color: #a0a0a0;">Avg Response (min)</div></div>
-            <div class="stat-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><div class="stat-value" id="topReporter" style="font-size: 1.8rem; font-weight: 800; color: #2ecc71;">-</div><div class="stat-label" style="font-size: 0.7rem; color: #a0a0a0;">Top Reporter</div></div>
+    <div style="padding:15px 20px; overflow-y:auto; height:100%;">
+        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:15px; margin-bottom:20px;">
+            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="totalReports" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Total Reports</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="totalUsers" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Active Users</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="avgResponse" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Avg Response (min)</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="topReporter" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Top Reporter</div></div>
         </div>
-        <div class="chart-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px; margin-bottom: 15px;">
-            <div class="chart-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><h3 style="margin-bottom: 12px; color: #2ecc71;">📈 Daily Report Trend (Last 30 Days)</h3><canvas id="trendChart"></canvas></div>
-            <div class="chart-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><h3 style="margin-bottom: 12px; color: #2ecc71;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
-        </div>
-        <div class="chart-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px; margin-bottom: 15px;">
-            <div class="chart-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><h3 style="margin-bottom: 12px; color: #2ecc71;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
-            <div class="chart-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35;"><h3 style="margin-bottom: 12px; color: #2ecc71;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
-        </div>
-        <div class="chart-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px;">
-            <div class="table-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35; overflow-x: auto;"><h3 style="margin-bottom: 12px; color: #2ecc71;">🏆 Top Reporters</h3><table id="reportersTable"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #2a2d35;">Rank</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #2a2d35;">Username</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #2a2d35;">Reports</th></tr></thead><tbody></tbody></table></div>
-            <div class="table-card" style="background: #1e1e1e; border-radius: 12px; padding: 15px; border: 1px solid #2a2d35; overflow-x: auto;"><h3 style="margin-bottom: 12px; color: #2ecc71;">👥 Users by Role</h3><table id="rolesTable"><thead><tr><th style="padding: 8px; text-align: left; border-bottom: 1px solid #2a2d35;">Role</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #2a2d35;">Count</th></tr></thead><tbody></tbody></table></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(350px,1fr)); gap:15px;">
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px; overflow-x:auto;"><h3 style="color:#2ecc71;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
+            <div style="background:#1e1e1e; border-radius:12px; padding:15px; overflow-x:auto;"><h3 style="color:#2ecc71;">👥 Users by Role</h3><table id="rolesTable" style="width:100%;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 </div>
@@ -1320,7 +1133,6 @@ let pieChart, barChart, lineChart, damageChart, trendChart, infraChart, crisisCh
 function loadOfflineQueue() { const saved = localStorage.getItem('offline_reports'); if (saved) offlineQueue = JSON.parse(saved); updateOfflineUI(); }
 function saveOfflineQueue() { localStorage.setItem('offline_reports', JSON.stringify(offlineQueue)); updateOfflineUI(); }
 function updateOfflineUI() { document.getElementById('pendingTasks').innerHTML = offlineQueue.length; }
-
 if (!deviceId) { deviceId = 'web_' + Date.now(); localStorage.setItem('device_id', deviceId); }
 loadOfflineQueue();
 
@@ -1342,111 +1154,68 @@ function switchTab(tab) {
 
 async function loadAdminStats() {
     try {
-        const response = await fetch('/api/admin/stats');
-        const data = await response.json();
+        const res = await fetch('/api/admin/stats');
+        const data = await res.json();
         document.getElementById('totalReports').innerHTML = data.total_reports;
         document.getElementById('totalUsers').innerHTML = data.total_users;
         document.getElementById('avgResponse').innerHTML = data.avg_response_minutes;
         document.getElementById('topReporter').innerHTML = data.top_reporters[0]?.username || '-';
-        
         if (trendChart) trendChart.destroy();
         trendChart = new Chart(document.getElementById('trendChart'), {
-            type: 'line',
-            data: { labels: data.daily_trend.map(d => d.date), datasets: [{ label: 'Reports', data: data.daily_trend.map(d => d.count), borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', fill: true, tension: 0.4 }] },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } } }
+            type: 'line', data: { labels: data.daily_trend.map(d=>d.date), datasets: [{ label:'Reports', data:data.daily_trend.map(d=>d.count), borderColor:'#2ecc71', fill:true, backgroundColor:'rgba(46,204,113,0.1)', tension:0.4 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        
         if (damageChart) damageChart.destroy();
         damageChart = new Chart(document.getElementById('damageChart'), {
-            type: 'doughnut',
-            data: { labels: data.by_damage.map(d => d.level), datasets: [{ data: data.by_damage.map(d => d.count), backgroundColor: ['#e74c3c', '#f39c12', '#2ecc71'] }] },
-            options: { responsive: true, plugins: { legend: { labels: { color: '#e0e0e0' } } } }
+            type: 'doughnut', data: { labels: data.by_damage.map(d=>d.level), datasets: [{ data:data.by_damage.map(d=>d.count), backgroundColor:['#e74c3c','#f39c12','#2ecc71'] }] },
+            options: { responsive: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        
         if (infraChart) infraChart.destroy();
         infraChart = new Chart(document.getElementById('infraChart'), {
-            type: 'bar',
-            data: { labels: data.by_infrastructure.map(d => d.type), datasets: [{ label: 'Reports', data: data.by_infrastructure.map(d => d.count), backgroundColor: '#2ecc71', borderRadius: 8 }] },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } } }
+            type: 'bar', data: { labels: data.by_infrastructure.map(d=>d.type), datasets: [{ label:'Reports', data:data.by_infrastructure.map(d=>d.count), backgroundColor:'#2ecc71', borderRadius:8 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        
         if (crisisChart) crisisChart.destroy();
         crisisChart = new Chart(document.getElementById('crisisChart'), {
-            type: 'bar',
-            data: { labels: data.by_crisis.map(d => d.crisis), datasets: [{ label: 'Reports', data: data.by_crisis.map(d => d.count), backgroundColor: '#3498db', borderRadius: 8 }] },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } } }
+            type: 'bar', data: { labels: data.by_crisis.map(d=>d.crisis), datasets: [{ label:'Reports', data:data.by_crisis.map(d=>d.count), backgroundColor:'#3498db', borderRadius:8 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r, i) => `<tr><td style="padding: 8px;">${i+1}</td><td style="padding: 8px;">${r.username}</td><td style="padding: 8px;">${r.reports}</td></tr>`).join('');
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r => `<tr><td style="padding: 8px;">${r.role}</td><td style="padding: 8px;">${r.count}</td></tr>`).join('');
-    } catch(e) { console.error('Error loading admin stats:', e); }
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td>${i+1}</td><td>${r.username}</td><td>${r.reports}</td></tr>`).join('');
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td>${r.role}</td><td>${r.count}</td></tr>`).join('');
+    } catch(e) { console.error(e); }
 }
 
 function updateCommandCenterCharts() {
-    const damageCounts = { minimal: 0, partial: 0, complete: 0 };
-    for (let r of reports) {
-        if (r.damage_level === 'minimal') damageCounts.minimal++;
-        else if (r.damage_level === 'partial') damageCounts.partial++;
-        else if (r.damage_level === 'complete') damageCounts.complete++;
-    }
-    if (pieChart) pieChart.destroy();
+    const damageCounts = { minimal:0, partial:0, complete:0 };
+    for(let r of reports) { if(r.damage_level==='minimal') damageCounts.minimal++; else if(r.damage_level==='partial') damageCounts.partial++; else if(r.damage_level==='complete') damageCounts.complete++; }
+    if(pieChart) pieChart.destroy();
     pieChart = new Chart(document.getElementById('pieChart'), {
-        type: 'pie',
-        data: { labels: ['Minimal Damage', 'Partial Damage', 'Complete Damage'], datasets: [{ data: [damageCounts.minimal, damageCounts.partial, damageCounts.complete], backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c'] }] },
-        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { font: { family: 'Arial Black', size: 10, color: '#000' } } } } }
+        type:'pie', data:{ labels:['Minimal','Partial','Complete'], datasets:[{ data:[damageCounts.minimal,damageCounts.partial,damageCounts.complete], backgroundColor:['#2ecc71','#f39c12','#e74c3c'] }] },
+        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10, weight:'bold' }, color:'#000' } } } }
     });
-    
-    const infraCounts = {};
-    for (let r of reports) {
-        const type = r.infrastructure_type || 'Unknown';
-        infraCounts[type] = (infraCounts[type] || 0) + 1;
-    }
-    const infraLabels = Object.keys(infraCounts).slice(0, 6);
-    const infraData = infraLabels.map(l => infraCounts[l]);
-    if (barChart) barChart.destroy();
+    const infraCounts = {}; for(let r of reports) { let t=r.infrastructure_type||'Unknown'; infraCounts[t]=(infraCounts[t]||0)+1; }
+    const infraLabels = Object.keys(infraCounts).slice(0,6);
+    const infraData = infraLabels.map(l=>infraCounts[l]);
+    if(barChart) barChart.destroy();
     barChart = new Chart(document.getElementById('barChart'), {
-        type: 'bar',
-        data: { labels: infraLabels, datasets: [{ label: 'Number of Reports', data: infraData, backgroundColor: '#3498db', borderRadius: 8 }] },
-        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'Report Count', color: '#000', font: { family: 'Arial Black', size: 12, weight: 'bold' } }, ticks: { color: '#000' } }, x: { title: { display: true, text: 'Infrastructure Type', color: '#000', font: { family: 'Arial Black', size: 12, weight: 'bold' } }, ticks: { color: '#000', font: { family: 'Arial Black', size: 10 } } } }, plugins: { legend: { labels: { font: { family: 'Arial Black', size: 10, color: '#000' } } } } }
+        type:'bar', data:{ labels:infraLabels, datasets:[{ label:'Reports', data:infraData, backgroundColor:'#3498db', borderRadius:8 }] },
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000' }, ticks:{ color:'#000' } }, x:{ ticks:{ color:'#000' } } }, plugins:{ legend:{ labels:{ color:'#000' } } } }
     });
-    
-    const last7Days = [];
-    const dailyCounts = {};
-    for (let r of reports) {
-        const date = new Date(r.timestamp).toISOString().split('T')[0];
-        dailyCounts[date] = (dailyCounts[date] || 0) + 1;
-    }
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        last7Days.push(dateStr);
-    }
-    const lineData = last7Days.map(d => dailyCounts[d] || 0);
-    if (lineChart) lineChart.destroy();
+    const dailyCounts = {}; for(let r of reports) { let d = new Date(r.timestamp).toISOString().split('T')[0]; dailyCounts[d]=(dailyCounts[d]||0)+1; }
+    const last7Days = []; for(let i=6;i>=0;i--) { let d=new Date(); d.setDate(d.getDate()-i); last7Days.push(d.toISOString().split('T')[0]); }
+    const lineData = last7Days.map(d=>dailyCounts[d]||0);
+    if(lineChart) lineChart.destroy();
     lineChart = new Chart(document.getElementById('lineChart'), {
-        type: 'line',
-        data: { labels: last7Days.map(d => d.slice(5)), datasets: [{ label: 'Reports per Day', data: lineData, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', fill: true, tension: 0.4 }] },
-        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Reports', color: '#000', font: { family: 'Arial Black', size: 12, weight: 'bold' } }, ticks: { color: '#000' } }, x: { title: { display: true, text: 'Date', color: '#000', font: { family: 'Arial Black', size: 12, weight: 'bold' } }, ticks: { color: '#000', font: { family: 'Arial Black', size: 10 } } } }, plugins: { legend: { labels: { font: { family: 'Arial Black', size: 10, color: '#000' } } } } }
+        type:'line', data:{ labels:last7Days.map(d=>d.slice(5)), datasets:[{ label:'Reports per Day', data:lineData, borderColor:'#2ecc71', backgroundColor:'rgba(46,204,113,0.1)', fill:true, tension:0.4 }] },
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000' }, ticks:{ color:'#000' } }, x:{ ticks:{ color:'#000' } } }, plugins:{ legend:{ labels:{ color:'#000' } } } }
     });
 }
 
 async function setLanguage(lang) {
-    currentLang = lang;
-    localStorage.setItem('language', lang);
-    try {
-        const res = await fetch(`/api/lang/${lang}`);
-        const data = await res.json();
-        translations = data;
-        updateUITexts();
-    } catch(e) { console.error('Language error', e); }
+    currentLang = lang; localStorage.setItem('language', lang);
+    try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); translations = data; updateUITexts(); } catch(e) { console.error(e); }
 }
-
 function updateUITexts() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if(translations[key]) el.innerText = translations[key];
-    });
     document.getElementById('reportTitle').innerText = translations.report_damage || 'Report Damage';
     document.getElementById('gpsLabel').innerText = translations.gps_location || 'Use My GPS';
     document.getElementById('submitLabel').innerText = translations.submit || 'Submit Report';
@@ -1459,319 +1228,264 @@ function updateUITexts() {
     document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
     document.getElementById('chatInput').placeholder = translations.type_message || 'Type a message...';
 }
-
 document.getElementById('languageSelect').value = currentLang;
 document.getElementById('languageSelect').addEventListener('change', (e) => setLanguage(e.target.value));
 setLanguage(currentLang);
 
 function initMap() {
-    map = L.map('map').setView([20, 0], 2);
+    map = L.map('map').setView([20,0],2);
     map.attributionControl.setPrefix('');
-    // Use standard OpenStreetMap tiles
-    currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        subdomains: 'abc',
-        maxZoom: 19
-    }).addTo(map);
-    
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '', maxZoom: 19 }).addTo(map);
     map.on('click', async function(e) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
+        let lat = e.latlng.lat, lng = e.latlng.lng;
         document.getElementById('lat').value = lat.toFixed(6);
         document.getElementById('lng').value = lng.toFixed(6);
         try {
-            const res = await fetch(`/api/building/${lat}/${lng}`);
-            const building = await res.json();
-            if (building && building.name) {
+            let res = await fetch(`/api/building/${lat}/${lng}`);
+            let building = await res.json();
+            if(building && building.name) {
                 document.getElementById('buildingName').value = building.name;
                 document.getElementById('selectedBuildingInfo').style.display = 'block';
                 document.getElementById('selectedBuildingInfo').innerHTML = `🏢 Selected: ${building.name}<br>📍 ${building.address || 'Address unknown'}`;
-            } else {
-                document.getElementById('selectedBuildingInfo').style.display = 'none';
-            }
+            } else { document.getElementById('selectedBuildingInfo').style.display = 'none'; }
         } catch(err) { console.error(err); }
-        if (currentMarker) map.removeLayer(currentMarker);
-        currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Selected location').openPopup();
+        if(currentMarker) map.removeLayer(currentMarker);
+        currentMarker = L.marker([lat,lng]).addTo(map).bindPopup('Selected location').openPopup();
     });
 }
-
 function shareLocation() {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            document.getElementById('lat').value = lat.toFixed(6);
-            document.getElementById('lng').value = lng.toFixed(6);
-            map.setView([lat, lng], 16);
-            if (currentMarker) map.removeLayer(currentMarker);
-            currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Your location').openPopup();
-        });
-    } else {
-        alert('Geolocation not supported');
-    }
+    if(navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
+        let lat = pos.coords.latitude, lng = pos.coords.longitude;
+        document.getElementById('lat').value = lat.toFixed(6); document.getElementById('lng').value = lng.toFixed(6);
+        map.setView([lat,lng],16);
+        if(currentMarker) map.removeLayer(currentMarker);
+        currentMarker = L.marker([lat,lng]).addTo(map).bindPopup('Your location').openPopup();
+    });
 }
-
 async function sendSMSReport() {
-    const smsText = document.getElementById('smsText').value;
-    const smsNumber = document.getElementById('smsNumber').value;
-    const statusDiv = document.getElementById('smsStatus');
-    if (!smsText) { statusDiv.innerText = 'Please enter SMS text'; return; }
+    let smsText = document.getElementById('smsText').value, smsNumber = document.getElementById('smsNumber').value;
+    let statusDiv = document.getElementById('smsStatus');
+    if(!smsText) { statusDiv.innerText = 'Please enter SMS text'; return; }
     try {
-        const formData = new FormData();
-        formData.append('sms_text', smsText);
-        formData.append('sms_number', smsNumber);
-        const res = await fetch('/api/sms_report', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.status === 'success') {
-            statusDiv.innerHTML = '✅ SMS report sent!';
-            document.getElementById('smsText').value = '';
-            loadReports();
-        } else {
-            statusDiv.innerHTML = '❌ ' + data.message;
-        }
+        let fd = new FormData(); fd.append('sms_text', smsText); fd.append('sms_number', smsNumber);
+        let res = await fetch('/api/sms_report', { method:'POST', body:fd });
+        let data = await res.json();
+        if(data.status==='success') { statusDiv.innerHTML = '✅ SMS report sent!'; document.getElementById('smsText').value = ''; loadReports(); }
+        else { statusDiv.innerHTML = '❌ '+data.message; }
     } catch(e) { statusDiv.innerHTML = '❌ Failed to send SMS'; }
 }
-
 document.getElementById('photo').addEventListener('change', function(e) {
-    const preview = document.getElementById('photoPreview');
-    if (e.target.files && e.target.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(ev) {
-            preview.innerHTML = `<img src="${ev.target.result}" alt="Preview" style="max-width:100%; max-height:80px;">`;
-        };
+    let preview = document.getElementById('photoPreview');
+    if(e.target.files && e.target.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:80px;">`; };
         reader.readAsDataURL(e.target.files[0]);
-    } else {
-        preview.innerHTML = '';
-    }
+    } else { preview.innerHTML = ''; }
 });
-
 async function submitReport() {
-    const formData = new FormData();
-    formData.append('damage_level', document.getElementById('damageLevel').value);
-    formData.append('infrastructure_type', document.getElementById('infrastructureType').value);
-    formData.append('building_name', document.getElementById('buildingName').value);
-    formData.append('crisis_nature', document.getElementById('crisisNature').value);
-    formData.append('debris', document.getElementById('debris').value);
-    formData.append('text_location', document.getElementById('textLocation').value);
-    formData.append('lat', document.getElementById('lat').value);
-    formData.append('lng', document.getElementById('lng').value);
-    formData.append('notes', document.getElementById('notes').value);
-    const photoFile = document.getElementById('photo').files[0];
-    if (photoFile) formData.append('photo', photoFile);
-    const statusDiv = document.getElementById('submitStatus');
+    let fd = new FormData();
+    fd.append('damage_level', document.getElementById('damageLevel').value);
+    fd.append('infrastructure_type', document.getElementById('infrastructureType').value);
+    fd.append('building_name', document.getElementById('buildingName').value);
+    fd.append('crisis_nature', document.getElementById('crisisNature').value);
+    fd.append('debris', document.getElementById('debris').value);
+    fd.append('text_location', document.getElementById('textLocation').value);
+    fd.append('lat', document.getElementById('lat').value);
+    fd.append('lng', document.getElementById('lng').value);
+    fd.append('notes', document.getElementById('notes').value);
+    let photoFile = document.getElementById('photo').files[0];
+    if(photoFile) fd.append('photo', photoFile);
+    let statusDiv = document.getElementById('submitStatus');
     statusDiv.innerHTML = 'Submitting...';
     try {
-        const res = await fetch('/api/report', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.status === 'success') {
+        let res = await fetch('/api/report', { method:'POST', body:fd });
+        let data = await res.json();
+        if(data.status==='success') {
             statusDiv.innerHTML = '✅ Report submitted!';
-            document.getElementById('lat').value = '';
-            document.getElementById('lng').value = '';
-            document.getElementById('buildingName').value = '';
-            document.getElementById('textLocation').value = '';
-            document.getElementById('notes').value = '';
-            document.getElementById('photo').value = '';
+            document.getElementById('lat').value = ''; document.getElementById('lng').value = '';
+            document.getElementById('buildingName').value = ''; document.getElementById('textLocation').value = '';
+            document.getElementById('notes').value = ''; document.getElementById('photo').value = '';
             document.getElementById('photoPreview').innerHTML = '';
-            if (currentMarker) map.removeLayer(currentMarker);
+            if(currentMarker) map.removeLayer(currentMarker);
             loadReports();
-        } else {
-            statusDiv.innerHTML = '❌ Submission failed';
-        }
+        } else { statusDiv.innerHTML = '❌ Submission failed'; }
     } catch(e) {
         statusDiv.innerHTML = '❌ Offline – saved locally';
-        const offlineReport = { report_uuid: Date.now().toString(), damage_level: document.getElementById('damageLevel').value, lat: document.getElementById('lat').value, lng: document.getElementById('lng').value, location_text: document.getElementById('textLocation').value, infrastructure_type: document.getElementById('infrastructureType').value, building_name: document.getElementById('buildingName').value, crisis_nature: document.getElementById('crisisNature').value, debris: document.getElementById('debris').value, notes: document.getElementById('notes').value, timestamp: new Date().toISOString(), is_offline: true };
-        offlineQueue.push(offlineReport);
-        saveOfflineQueue();
-        loadReports();
+        offlineQueue.push({ report_uuid:Date.now().toString(), damage_level:document.getElementById('damageLevel').value, lat:document.getElementById('lat').value, lng:document.getElementById('lng').value, location_text:document.getElementById('textLocation').value, infrastructure_type:document.getElementById('infrastructureType').value, building_name:document.getElementById('buildingName').value, crisis_nature:document.getElementById('crisisNature').value, debris:document.getElementById('debris').value, notes:document.getElementById('notes').value, timestamp:new Date().toISOString(), is_offline:true });
+        saveOfflineQueue(); loadReports();
     }
 }
-
 async function syncOfflineReports() {
-    if (offlineQueue.length === 0) return;
+    if(offlineQueue.length===0) return;
     try {
-        const res = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(offlineQueue) });
-        if (res.ok) {
-            offlineQueue = [];
-            saveOfflineQueue();
-            loadReports();
-            showToast('Synced offline reports', 'success');
-        }
-    } catch(e) { console.error('Sync failed', e); }
+        let res = await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(offlineQueue) });
+        if(res.ok) { offlineQueue = []; saveOfflineQueue(); loadReports(); showToast('Synced offline reports','success'); }
+    } catch(e) { console.error(e); }
 }
-
 async function forceSync() { await syncOfflineReports(); }
-
 async function loadReports() {
     try {
-        const res = await fetch('/api/reports');
-        const serverReports = await res.json();
-        reports = [...serverReports, ...offlineQueue.map(r => ({ ...r, is_offline: true }))];
-        reports.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        let res = await fetch('/api/reports');
+        let serverReports = await res.json();
+        reports = [...serverReports, ...offlineQueue.map(r=>({...r,is_offline:true}))];
+        reports.sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
         updateMapMarkers();
         updateReportsList();
         updateConnectionStatus(true);
         updateKPIs();
         updateCommandCenterCharts();
     } catch(e) {
-        reports = offlineQueue.map(r => ({ ...r, is_offline: true }));
+        reports = offlineQueue.map(r=>({...r,is_offline:true}));
         updateReportsList();
         updateConnectionStatus(false);
         updateKPIs();
         updateCommandCenterCharts();
     }
 }
-
 function updateKPIs() {
-    const total = reports.length;
-    const critical = reports.filter(r => r.damage_level === 'complete').length;
-    const high = reports.filter(r => r.damage_level === 'partial').length;
+    let total = reports.length;
+    let critical = reports.filter(r=>r.damage_level==='complete').length;
+    let high = reports.filter(r=>r.damage_level==='partial').length;
     document.getElementById('activeCases').innerText = total;
     document.getElementById('criticalCount').innerText = critical;
     document.getElementById('highCount').innerText = high;
-    document.getElementById('capacityBar').style.width = Math.min(100, (total/500)*100) + '%';
+    document.getElementById('capacityBar').style.width = Math.min(100,(total/500)*100)+'%';
     document.getElementById('pendingTasks').innerText = offlineQueue.length;
     document.getElementById('urgentTasks').innerText = critical;
-    document.getElementById('resourcesDeployed').innerText = Math.floor(total * 0.7);
-    document.getElementById('deployedCount').innerText = Math.floor(total * 0.4);
-    document.getElementById('standbyCount').innerText = Math.floor(total * 0.3);
+    document.getElementById('resourcesDeployed').innerText = Math.floor(total*0.7);
+    document.getElementById('deployedCount').innerText = Math.floor(total*0.4);
+    document.getElementById('standbyCount').innerText = Math.floor(total*0.3);
     document.getElementById('totalVolunteers').innerText = 350 + Math.floor(total/2);
     document.getElementById('activeVolunteersCount').innerText = 200 + Math.floor(total/3);
     document.getElementById('standbyVolunteers').innerText = 100 + Math.floor(total/5);
     document.getElementById('offlineVolunteers').innerText = 50;
 }
-
 function updateMapMarkers() {
-    for (let m of markers) map.removeLayer(m);
+    for(let m of markers) map.removeLayer(m);
     markers = [];
-    for (let r of reports) {
-        if (r.lat && r.lng) {
+    for(let r of reports) {
+        if(r.lat && r.lng) {
             let color = '#2ecc71';
-            if (r.damage_level === 'partial') color = '#f39c12';
-            if (r.damage_level === 'complete') color = '#e74c3c';
-            const marker = L.circleMarker([r.lat, r.lng], { radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 }).addTo(map);
-            marker.bindPopup(`<b>${r.building_name || 'Building'}</b><br>Damage: ${r.damage_level}<br>${r.timestamp ? new Date(r.timestamp).toLocaleString() : ''}`);
+            if(r.damage_level==='partial') color='#f39c12';
+            if(r.damage_level==='complete') color='#e74c3c';
+            let marker = L.circleMarker([r.lat,r.lng], { radius:8, fillColor:color, color:'#fff', weight:2, fillOpacity:0.8 }).addTo(map);
+            marker.bindPopup(`<b>${r.building_name||'Building'}</b><br>Damage: ${r.damage_level}<br>${new Date(r.timestamp).toLocaleString()}`);
             markers.push(marker);
         }
     }
 }
-
 function updateReportsList() {
-    const container = document.getElementById('reportsList');
-    if (!container) return;
+    let container = document.getElementById('reportsList');
+    if(!container) return;
     container.innerHTML = '';
-    reports.slice(0, 15).forEach(r => {
-        const div = document.createElement('div');
-        div.className = `report-item ${r.damage_level === 'complete' ? 'severity-critical' : (r.damage_level === 'partial' ? 'severity-high' : '')}`;
-        div.innerHTML = `<strong>${r.building_name || 'Location'}</strong><br>${r.infrastructure_type || ''} - ${r.damage_level}<br><small>${new Date(r.timestamp).toLocaleString()}</small>`;
-        div.onclick = () => { if (r.lat && r.lng) map.setView([r.lat, r.lng], 18); };
+    reports.slice(0,15).forEach(r => {
+        let div = document.createElement('div');
+        div.className = `report-item ${r.damage_level==='complete'?'severity-critical':(r.damage_level==='partial'?'severity-high':'')}`;
+        div.innerHTML = `<strong>${r.building_name||'Location'}</strong><br>${r.infrastructure_type||''} - ${r.damage_level}<br><small>${new Date(r.timestamp).toLocaleString()}</small>`;
+        div.onclick = () => { if(r.lat && r.lng) map.setView([r.lat,r.lng],18); };
         container.appendChild(div);
     });
 }
-
 function updateConnectionStatus(isOnline) {
-    const statusDiv = document.getElementById('connectionStatus');
-    if (isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    let statusDiv = document.getElementById('connectionStatus');
+    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
     else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
-
 async function loadCurrentUser() {
     try {
-        const res = await fetch('/api/current_user');
-        const user = await res.json();
+        let res = await fetch('/api/current_user');
+        let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        if (user.role === 'admin') {
-            document.getElementById('exportCard').style.display = 'block';
-            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
-            isAdmin = true;
-        } else {
-            document.getElementById('exportCard').style.display = 'none';
-            isAdmin = false;
-        }
+        if(user.role === 'admin') { document.getElementById('exportCard').style.display = 'block'; document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; isAdmin=true; }
+        else { document.getElementById('exportCard').style.display = 'none'; isAdmin=false; }
         connectWebSocket();
-    } catch(e) { console.error('Auth error', e); }
+    } catch(e) { console.error('Auth error',e); }
 }
-
 function connectWebSocket() {
-    if (ws && ws.readyState === WebSocket.OPEN) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser.username}`);
-    ws.onopen = () => { console.log('WebSocket connected'); setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'})); }, 30000); };
+    if(ws && ws.readyState === WebSocket.OPEN) return;
+    let protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    let wsUrl = `${protocol}://${window.location.host}/ws/${currentUser.username}`;
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => { console.log('WebSocket connected'); if(window.wsPingInterval) clearInterval(window.wsPingInterval); window.wsPingInterval = setInterval(() => { if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'})); }, 30000); };
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'presence') updatePresence(data.users, data.count);
-        else if (data.type === 'live_contributors') updateLiveContributors(data.contributors);
-        else if (data.type === 'chat') addChatMessage(data.data);
-        else if (data.type === 'new_report') loadReports();
+        try {
+            let data = JSON.parse(event.data);
+            if(data.type === 'presence') updatePresence(data.users, data.count);
+            else if(data.type === 'live_contributors') updateLiveContributors(data.contributors);
+            else if(data.type === 'chat') addChatMessage(data.data);
+            else if(data.type === 'new_report') loadReports();
+            else if(data.type === 'pong') { /* keep alive */ }
+        } catch(e) { console.error(e); }
     };
-    ws.onclose = () => { setTimeout(connectWebSocket, 3000); };
+    ws.onclose = () => { console.log('WebSocket closed, reconnecting...'); setTimeout(connectWebSocket,3000); };
+    ws.onerror = (error) => { console.error('WebSocket error',error); ws.close(); };
 }
-
 function updatePresence(users, count) {
-    const container = document.getElementById('presenceList');
+    let container = document.getElementById('presenceList');
     document.getElementById('presenceCount').innerText = count;
-    if (!container) return;
-    container.innerHTML = users.map(u => `<div class="presence-user"><span>${u.avatar || '👤'}</span><span>${u.username}</span><span class="online-dot"></span></div>`).join('');
+    if(!container) return;
+    container.innerHTML = users.map(u => `<div class="presence-user"><span>${u.avatar||'👤'}</span><span>${u.username}</span><span class="online-dot"></span></div>`).join('');
 }
-
-function updateLiveContributors(contributors) { /* optional map layers */ }
-
+function updateLiveContributors(contributors) { /* optional */ }
 function sendChatMessage() {
-    const input = document.getElementById('chatInput');
-    const msg = input.value.trim();
-    if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'chat', message: msg }));
+    let input = document.getElementById('chatInput');
+    let msg = input.value.trim();
+    if(!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type:'chat', message:msg }));
     input.value = '';
 }
-
 function addChatMessage(msg) {
-    const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
+    let container = document.getElementById('chatMessages');
+    let div = document.createElement('div');
     div.className = msg.username === currentUser.username ? 'chat-message own' : 'chat-message other';
     div.innerHTML = `<strong>${msg.username}</strong> (${msg.role})<br>${msg.message}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
-
 async function loadLeaderboard() {
     try {
-        const res = await fetch('/api/leaderboard');
-        const leaders = await res.json();
-        const container = document.getElementById('leaderboardList');
-        if (!container) return;
-        container.innerHTML = leaders.map((l, i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
+        let res = await fetch('/api/leaderboard');
+        let leaders = await res.json();
+        let container = document.getElementById('leaderboardList');
+        if(!container) return;
+        container.innerHTML = leaders.map((l,i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
     } catch(e) { console.error(e); }
 }
-
-async function loadStats() {
-    try {
-        const res = await fetch('/api/stats');
-        const stats = await res.json();
-        document.getElementById('totalReports').innerText = stats.total_reports;
-        document.getElementById('todayReports').innerText = stats.today_reports;
-        document.getElementById('pendingSync').innerText = stats.pending_sync;
-    } catch(e) {}
-}
-
-async function loadUserStats() { /* optional */ }
-function exportCSV() { window.open('/api/reports/csv', '_blank'); }
+async function loadStats() { try { let res=await fetch('/api/stats'); let stats=await res.json(); document.getElementById('totalReports').innerText=stats.total_reports; document.getElementById('todayReports').innerText=stats.today_reports; document.getElementById('pendingSync').innerText=stats.pending_sync; } catch(e){} }
+async function loadUserStats() {}
+function exportCSV() { window.open('/api/reports/csv','_blank'); }
 async function exportGeoJSON() {
-    try {
-        const res = await fetch('/api/reports/geojson');
-        const data = await res.json();
-        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'reports.geojson';
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch(e) { alert('Export failed'); }
+    try { let res=await fetch('/api/reports/geojson'); let data=await res.json(); let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='reports.geojson'; a.click(); URL.revokeObjectURL(url); } catch(e){ alert('Export failed'); }
 }
-function showToast(msg, type) { alert(msg); }
-function togglePresence() { const el = document.querySelector('.presence-list'); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
-function toggleChat() { const el = document.querySelector('.chat-messages'); if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none'; }
-function toggleLeaderboard() { const el = document.querySelector('.leaderboard-list'); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+function showToast(msg,type) { alert(msg); }
+function togglePresence() { let el=document.querySelector('.presence-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
+function toggleChat() { let el=document.querySelector('.chat-messages'); if(el) el.style.display=el.style.display==='none'?'flex':'none'; }
+function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
+
+// Click handlers for pending tasks and urgent tasks
+document.getElementById('pendingTasksCard').addEventListener('click', function() {
+    let pendingCount = offlineQueue.length;
+    if(pendingCount === 0) { alert('No pending tasks.'); return; }
+    let msg = 'Pending reports to sync:\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
+    msg += '\nClick OK to sync now.';
+    if(confirm(msg)) forceSync();
+});
+document.getElementById('urgentTasks').parentElement.parentElement.addEventListener('click', function() {
+    let criticalReports = reports.filter(r => r.damage_level === 'complete');
+    if(criticalReports.length === 0) { alert('No urgent (complete damage) reports.'); return; }
+    for(let m of markers) map.removeLayer(m);
+    markers = [];
+    for(let r of criticalReports) {
+        if(r.lat && r.lng) {
+            let marker = L.circleMarker([r.lat, r.lng], { radius:10, fillColor:'#e74c3c', color:'#fff', weight:2, fillOpacity:0.9 }).addTo(map);
+            marker.bindPopup(`<b>URGENT</b><br>${r.building_name || 'Building'}<br>Damage: ${r.damage_level}`);
+            markers.push(marker);
+        }
+    }
+    if(criticalReports.length > 0) map.setView([criticalReports[0].lat, criticalReports[0].lng], 14);
+});
 
 window.addEventListener('online', () => { updateConnectionStatus(true); syncOfflineReports(); loadReports(); showToast('Back online!'); updateKPIs(); updateCommandCenterCharts(); });
 window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('Offline – reports saved locally.'); });
@@ -1786,21 +1500,17 @@ loadUserStats();
 setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
-setInterval(() => loadLeaderboard(), 60000);
+setInterval(() => loadLeaderboard(), 10000);  // refresh leaderboard every 10 seconds
 </script>
 </body>
 </html>
 """
 
-# ============================================
-# VERCEL SERVERLESS HANDLER
-# ============================================
+# ========== VERCEL SERVERLESS HANDLER ==========
 from mangum import Mangum
 handler = Mangum(app)
 
-# ============================================
-# LOCAL DEVELOPMENT
-# ============================================
+# ========== LOCAL DEVELOPMENT ==========
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
