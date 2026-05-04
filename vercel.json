@@ -1,0 +1,4 @@
+{
+  "builds": [{ "src": "impactmapper.py", "use": "@vercel/python" }],
+  "routes": [{ "src": "/(.*)", "dest": "impactmapper.py" }]
+}
