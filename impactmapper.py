@@ -92,7 +92,6 @@ async def lifespan(app: FastAPI):
     if db_pool:
         await db_pool.close()
 
-# Single FastAPI instance
 app = FastAPI(title="UNDP ImpactMapper", version="27.0.0", lifespan=lifespan)
 
 app.add_middleware(
@@ -104,7 +103,7 @@ app.add_middleware(
 )
 
 # ============================================
-# WEBSOCKET MANAGER (unchanged)
+# WEBSOCKET MANAGER
 # ============================================
 class ConnectionManager:
     def __init__(self):
@@ -188,7 +187,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ============================================
-# OSM BUILDING LOOKUP (unchanged)
+# OSM BUILDING LOOKUP
 # ============================================
 def get_building_at_location(lat: float, lng: float):
     try:
@@ -221,7 +220,7 @@ def get_building_at_location(lat: float, lng: float):
     return None
 
 # ============================================
-# ASYNC DATABASE FUNCTIONS (unchanged)
+# ASYNC DATABASE FUNCTIONS
 # ============================================
 async def save_report(report_uuid: str, building_id: str, building_osm_id: str, building_name: str, building_address: str,
                 damage_level: str, lat: float, lng: float, location_text: str, photo_path: str,
@@ -263,7 +262,7 @@ async def update_user_points(username: str, points_increment: int = 10):
         await conn.execute("UPDATE users SET points = points + $1, verified_reports = verified_reports + 1 WHERE username = $2", points_increment, username)
 
 # ============================================
-# AUTHENTICATION (unchanged)
+# AUTHENTICATION
 # ============================================
 async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
     async with db_pool.acquire() as conn:
@@ -286,7 +285,7 @@ def require_reporter(current_user: dict = Depends(verify_user)):
     return current_user
 
 # ============================================
-# 6 LANGUAGES (full dictionary - exactly as you had)
+# 6 LANGUAGES (full dictionary)
 # ============================================
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "subtitle": "Unified Command Center | Analytics", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
@@ -300,7 +299,6 @@ LANGUAGES = {
 # ============================================
 # API ENDPOINTS
 # ============================================
-
 @app.get("/")
 async def login_page():
     return HTMLResponse(LOGIN_HTML)
@@ -347,7 +345,6 @@ async def create_report(
     if photo and photo.filename:
         ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
         photo_filename = f"{datetime.now().timestamp()}_{current_user['username']}_{uuid.uuid4().hex[:6]}.{ext}"
-        # FIX: save to /tmp/photos
         photo_path = os.path.join(PHOTOS_DIR, photo_filename)
         content = await photo.read()
         with open(photo_path, "wb") as f:
@@ -477,11 +474,9 @@ async def get_stats():
 
 @app.get("/photos/{filename}")
 async def serve_photo(filename: str):
-    # FIX: serve from /tmp/photos
     file_path = os.path.join(PHOTOS_DIR, filename)
     if os.path.exists(file_path):
         return FileResponse(file_path)
-    # fallback (should not be needed)
     old_path = f"photos/{filename}"
     if os.path.exists(old_path):
         return FileResponse(old_path)
@@ -509,7 +504,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         manager.disconnect(websocket)
 
 # ============================================
-# LOGIN HTML (exactly your original)
+# LOGIN HTML (with dynamic year & OSM tile fix)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -749,10 +744,11 @@ LOGIN_HTML = """
                 <span class="partner">🚒 FEMA</span>
                 <span class="partner">🗺️ OpenStreetMap</span>
             </div>
-            <p>© 2024 UNDP ImpactMapper - Unified Crisis Intelligence Platform</p>
+            <p>© <span id="currentYear"></span> UNDP ImpactMapper - Unified Crisis Intelligence Platform</p>
         </div>
     </div>
     <script>
+        document.getElementById('currentYear').innerText = new Date().getFullYear();
         const langSelect = document.getElementById('languageSelect');
         async function setLanguage(lang) { try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {} }
         langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
@@ -775,7 +771,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (exactly your original)
+# UNIFIED DASHBOARD HTML (with OSM tiles, chat, dynamic year, language)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1435,64 +1431,375 @@ function updateCommandCenterCharts() {
     });
 }
 
-async function setLanguage(lang) { /* existing setLanguage implementation */ }
+async function setLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem('language', lang);
+    try {
+        const res = await fetch(`/api/lang/${lang}`);
+        const data = await res.json();
+        translations = data;
+        updateUITexts();
+    } catch(e) { console.error('Language error', e); }
+}
+
+function updateUITexts() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if(translations[key]) el.innerText = translations[key];
+    });
+    document.getElementById('reportTitle').innerText = translations.report_damage || 'Report Damage';
+    document.getElementById('gpsLabel').innerText = translations.gps_location || 'Use My GPS';
+    document.getElementById('submitLabel').innerText = translations.submit || 'Submit Report';
+    document.getElementById('smsTitle').innerText = translations.sms_report || 'SMS Report';
+    document.getElementById('smsSendLabel').innerText = translations.sms_send || 'Send SMS Report';
+    document.getElementById('recentTitle').innerText = translations.recent_reports || 'Recent Reports';
+    document.getElementById('exportTitle').innerText = translations.export_data || 'Export Data (Admin Only)';
+    document.getElementById('csvLabel').innerText = translations.export_csv || 'Export CSV';
+    document.getElementById('geojsonLabel').innerText = translations.export_geojson || 'Export GeoJSON';
+    document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
+    document.getElementById('chatInput').placeholder = translations.type_message || 'Type a message...';
+}
+
 document.getElementById('languageSelect').value = currentLang;
 document.getElementById('languageSelect').addEventListener('change', (e) => setLanguage(e.target.value));
 setLanguage(currentLang);
 
-function initMap() { /* existing map initialization */ }
-function shareLocation() { /* existing */ }
-async function sendSMSReport() { /* existing */ }
-document.getElementById('photo').addEventListener('change', function(e) { /* existing */ });
-async function submitReport() { /* existing – uses fetch to /api/report */ }
-async function syncOfflineReports() { /* existing */ }
-async function forceSync() { /* existing */ }
-async function loadReports() { /* existing */ }
-function updateKPIs() { /* existing */ }
-function updateMapMarkers() { /* existing */ }
-function updateReportsList() { /* existing */ }
-function updateConnectionStatus(isOnline) { /* existing */ }
-async function loadCurrentUser() { /* existing */ }
-function connectWebSocket() { /* existing */ }
-function updatePresence(users, count) { /* existing */ }
-function updateLiveContributors(contributors) { /* existing */ }
-function sendChatMessage() { /* existing */ }
-function addChatMessage(msg) { /* existing */ }
-async function loadLeaderboard() { /* existing */ }
-async function loadStats() { /* existing */ }
-async function loadUserStats() { /* existing */ }
-function exportCSV() { window.open('/api/reports/csv', '_blank'); }
-async function exportGeoJSON() { /* existing */ }
-function showToast(msg, type) { /* existing */ }
-function togglePresence() { /* existing */ }
-function toggleChat() { /* existing */ }
-function toggleLeaderboard() { /* existing */ }
+function initMap() {
+    map = L.map('map').setView([20, 0], 2);
+    map.attributionControl.setPrefix('');
+    // Use standard OpenStreetMap tiles
+    currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        subdomains: 'abc',
+        maxZoom: 19
+    }).addTo(map);
+    
+    map.on('click', async function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        document.getElementById('lat').value = lat.toFixed(6);
+        document.getElementById('lng').value = lng.toFixed(6);
+        try {
+            const res = await fetch(`/api/building/${lat}/${lng}`);
+            const building = await res.json();
+            if (building && building.name) {
+                document.getElementById('buildingName').value = building.name;
+                document.getElementById('selectedBuildingInfo').style.display = 'block';
+                document.getElementById('selectedBuildingInfo').innerHTML = `🏢 Selected: ${building.name}<br>📍 ${building.address || 'Address unknown'}`;
+            } else {
+                document.getElementById('selectedBuildingInfo').style.display = 'none';
+            }
+        } catch(err) { console.error(err); }
+        if (currentMarker) map.removeLayer(currentMarker);
+        currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Selected location').openPopup();
+    });
+}
 
-window.addEventListener('online', () => { updateConnectionStatus(true); syncOfflineReports(); loadReports(); showToast('🟢 Back online!'); updateKPIs(); updateCommandCenterCharts(); });
-window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('🔴 You are offline. Reports will be saved locally.', 'error'); });
+function shareLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            document.getElementById('lat').value = lat.toFixed(6);
+            document.getElementById('lng').value = lng.toFixed(6);
+            map.setView([lat, lng], 16);
+            if (currentMarker) map.removeLayer(currentMarker);
+            currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Your location').openPopup();
+        });
+    } else {
+        alert('Geolocation not supported');
+    }
+}
+
+async function sendSMSReport() {
+    const smsText = document.getElementById('smsText').value;
+    const smsNumber = document.getElementById('smsNumber').value;
+    const statusDiv = document.getElementById('smsStatus');
+    if (!smsText) { statusDiv.innerText = 'Please enter SMS text'; return; }
+    try {
+        const formData = new FormData();
+        formData.append('sms_text', smsText);
+        formData.append('sms_number', smsNumber);
+        const res = await fetch('/api/sms_report', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'success') {
+            statusDiv.innerHTML = '✅ SMS report sent!';
+            document.getElementById('smsText').value = '';
+            loadReports();
+        } else {
+            statusDiv.innerHTML = '❌ ' + data.message;
+        }
+    } catch(e) { statusDiv.innerHTML = '❌ Failed to send SMS'; }
+}
+
+document.getElementById('photo').addEventListener('change', function(e) {
+    const preview = document.getElementById('photoPreview');
+    if (e.target.files && e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            preview.innerHTML = `<img src="${ev.target.result}" alt="Preview" style="max-width:100%; max-height:80px;">`;
+        };
+        reader.readAsDataURL(e.target.files[0]);
+    } else {
+        preview.innerHTML = '';
+    }
+});
+
+async function submitReport() {
+    const formData = new FormData();
+    formData.append('damage_level', document.getElementById('damageLevel').value);
+    formData.append('infrastructure_type', document.getElementById('infrastructureType').value);
+    formData.append('building_name', document.getElementById('buildingName').value);
+    formData.append('crisis_nature', document.getElementById('crisisNature').value);
+    formData.append('debris', document.getElementById('debris').value);
+    formData.append('text_location', document.getElementById('textLocation').value);
+    formData.append('lat', document.getElementById('lat').value);
+    formData.append('lng', document.getElementById('lng').value);
+    formData.append('notes', document.getElementById('notes').value);
+    const photoFile = document.getElementById('photo').files[0];
+    if (photoFile) formData.append('photo', photoFile);
+    const statusDiv = document.getElementById('submitStatus');
+    statusDiv.innerHTML = 'Submitting...';
+    try {
+        const res = await fetch('/api/report', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'success') {
+            statusDiv.innerHTML = '✅ Report submitted!';
+            document.getElementById('lat').value = '';
+            document.getElementById('lng').value = '';
+            document.getElementById('buildingName').value = '';
+            document.getElementById('textLocation').value = '';
+            document.getElementById('notes').value = '';
+            document.getElementById('photo').value = '';
+            document.getElementById('photoPreview').innerHTML = '';
+            if (currentMarker) map.removeLayer(currentMarker);
+            loadReports();
+        } else {
+            statusDiv.innerHTML = '❌ Submission failed';
+        }
+    } catch(e) {
+        statusDiv.innerHTML = '❌ Offline – saved locally';
+        const offlineReport = { report_uuid: Date.now().toString(), damage_level: document.getElementById('damageLevel').value, lat: document.getElementById('lat').value, lng: document.getElementById('lng').value, location_text: document.getElementById('textLocation').value, infrastructure_type: document.getElementById('infrastructureType').value, building_name: document.getElementById('buildingName').value, crisis_nature: document.getElementById('crisisNature').value, debris: document.getElementById('debris').value, notes: document.getElementById('notes').value, timestamp: new Date().toISOString(), is_offline: true };
+        offlineQueue.push(offlineReport);
+        saveOfflineQueue();
+        loadReports();
+    }
+}
+
+async function syncOfflineReports() {
+    if (offlineQueue.length === 0) return;
+    try {
+        const res = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(offlineQueue) });
+        if (res.ok) {
+            offlineQueue = [];
+            saveOfflineQueue();
+            loadReports();
+            showToast('Synced offline reports', 'success');
+        }
+    } catch(e) { console.error('Sync failed', e); }
+}
+
+async function forceSync() { await syncOfflineReports(); }
+
+async function loadReports() {
+    try {
+        const res = await fetch('/api/reports');
+        const serverReports = await res.json();
+        reports = [...serverReports, ...offlineQueue.map(r => ({ ...r, is_offline: true }))];
+        reports.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        updateMapMarkers();
+        updateReportsList();
+        updateConnectionStatus(true);
+        updateKPIs();
+        updateCommandCenterCharts();
+    } catch(e) {
+        reports = offlineQueue.map(r => ({ ...r, is_offline: true }));
+        updateReportsList();
+        updateConnectionStatus(false);
+        updateKPIs();
+        updateCommandCenterCharts();
+    }
+}
+
+function updateKPIs() {
+    const total = reports.length;
+    const critical = reports.filter(r => r.damage_level === 'complete').length;
+    const high = reports.filter(r => r.damage_level === 'partial').length;
+    document.getElementById('activeCases').innerText = total;
+    document.getElementById('criticalCount').innerText = critical;
+    document.getElementById('highCount').innerText = high;
+    document.getElementById('capacityBar').style.width = Math.min(100, (total/500)*100) + '%';
+    document.getElementById('pendingTasks').innerText = offlineQueue.length;
+    document.getElementById('urgentTasks').innerText = critical;
+    document.getElementById('resourcesDeployed').innerText = Math.floor(total * 0.7);
+    document.getElementById('deployedCount').innerText = Math.floor(total * 0.4);
+    document.getElementById('standbyCount').innerText = Math.floor(total * 0.3);
+    document.getElementById('totalVolunteers').innerText = 350 + Math.floor(total/2);
+    document.getElementById('activeVolunteersCount').innerText = 200 + Math.floor(total/3);
+    document.getElementById('standbyVolunteers').innerText = 100 + Math.floor(total/5);
+    document.getElementById('offlineVolunteers').innerText = 50;
+}
+
+function updateMapMarkers() {
+    for (let m of markers) map.removeLayer(m);
+    markers = [];
+    for (let r of reports) {
+        if (r.lat && r.lng) {
+            let color = '#2ecc71';
+            if (r.damage_level === 'partial') color = '#f39c12';
+            if (r.damage_level === 'complete') color = '#e74c3c';
+            const marker = L.circleMarker([r.lat, r.lng], { radius: 8, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 }).addTo(map);
+            marker.bindPopup(`<b>${r.building_name || 'Building'}</b><br>Damage: ${r.damage_level}<br>${r.timestamp ? new Date(r.timestamp).toLocaleString() : ''}`);
+            markers.push(marker);
+        }
+    }
+}
+
+function updateReportsList() {
+    const container = document.getElementById('reportsList');
+    if (!container) return;
+    container.innerHTML = '';
+    reports.slice(0, 15).forEach(r => {
+        const div = document.createElement('div');
+        div.className = `report-item ${r.damage_level === 'complete' ? 'severity-critical' : (r.damage_level === 'partial' ? 'severity-high' : '')}`;
+        div.innerHTML = `<strong>${r.building_name || 'Location'}</strong><br>${r.infrastructure_type || ''} - ${r.damage_level}<br><small>${new Date(r.timestamp).toLocaleString()}</small>`;
+        div.onclick = () => { if (r.lat && r.lng) map.setView([r.lat, r.lng], 18); };
+        container.appendChild(div);
+    });
+}
+
+function updateConnectionStatus(isOnline) {
+    const statusDiv = document.getElementById('connectionStatus');
+    if (isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; statusDiv.className = 'status-badge'; }
+}
+
+async function loadCurrentUser() {
+    try {
+        const res = await fetch('/api/current_user');
+        const user = await res.json();
+        currentUser = user;
+        document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
+        if (user.role === 'admin') {
+            document.getElementById('exportCard').style.display = 'block';
+            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
+            isAdmin = true;
+        } else {
+            document.getElementById('exportCard').style.display = 'none';
+            isAdmin = false;
+        }
+        connectWebSocket();
+    } catch(e) { console.error('Auth error', e); }
+}
+
+function connectWebSocket() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${window.location.host}/ws/${currentUser.username}`);
+    ws.onopen = () => { console.log('WebSocket connected'); setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'})); }, 30000); };
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'presence') updatePresence(data.users, data.count);
+        else if (data.type === 'live_contributors') updateLiveContributors(data.contributors);
+        else if (data.type === 'chat') addChatMessage(data.data);
+        else if (data.type === 'new_report') loadReports();
+    };
+    ws.onclose = () => { setTimeout(connectWebSocket, 3000); };
+}
+
+function updatePresence(users, count) {
+    const container = document.getElementById('presenceList');
+    document.getElementById('presenceCount').innerText = count;
+    if (!container) return;
+    container.innerHTML = users.map(u => `<div class="presence-user"><span>${u.avatar || '👤'}</span><span>${u.username}</span><span class="online-dot"></span></div>`).join('');
+}
+
+function updateLiveContributors(contributors) { /* optional map layers */ }
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'chat', message: msg }));
+    input.value = '';
+}
+
+function addChatMessage(msg) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = msg.username === currentUser.username ? 'chat-message own' : 'chat-message other';
+    div.innerHTML = `<strong>${msg.username}</strong> (${msg.role})<br>${msg.message}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+async function loadLeaderboard() {
+    try {
+        const res = await fetch('/api/leaderboard');
+        const leaders = await res.json();
+        const container = document.getElementById('leaderboardList');
+        if (!container) return;
+        container.innerHTML = leaders.map((l, i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const stats = await res.json();
+        document.getElementById('totalReports').innerText = stats.total_reports;
+        document.getElementById('todayReports').innerText = stats.today_reports;
+        document.getElementById('pendingSync').innerText = stats.pending_sync;
+    } catch(e) {}
+}
+
+async function loadUserStats() { /* optional */ }
+function exportCSV() { window.open('/api/reports/csv', '_blank'); }
+async function exportGeoJSON() {
+    try {
+        const res = await fetch('/api/reports/geojson');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reports.geojson';
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('Export failed'); }
+}
+function showToast(msg, type) { alert(msg); }
+function togglePresence() { const el = document.querySelector('.presence-list'); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+function toggleChat() { const el = document.querySelector('.chat-messages'); if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none'; }
+function toggleLeaderboard() { const el = document.querySelector('.leaderboard-list'); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+
+window.addEventListener('online', () => { updateConnectionStatus(true); syncOfflineReports(); loadReports(); showToast('Back online!'); updateKPIs(); updateCommandCenterCharts(); });
+window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('Offline – reports saved locally.'); });
 
 updateConnectionStatus(navigator.onLine);
 initMap();
 loadCurrentUser();
 loadReports();
+loadLeaderboard();
 loadStats();
 loadUserStats();
 setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
+setInterval(() => loadLeaderboard(), 60000);
 </script>
 </body>
 </html>
 """
 
 # ============================================
-# VERCEL SERVERLESS HANDLER (REQUIRED)
+# VERCEL SERVERLESS HANDLER
 # ============================================
 from mangum import Mangum
 handler = Mangum(app)
 
 # ============================================
-# LOCAL DEVELOPMENT SERVER
+# LOCAL DEVELOPMENT
 # ============================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
