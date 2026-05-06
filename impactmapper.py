@@ -285,7 +285,7 @@ def require_reporter(current_user: dict = Depends(verify_user)):
     return current_user
 
 # ============================================
-# LANGUAGES DICTIONARY (full, same as yours)
+# LANGUAGES DICTIONARY
 # ============================================
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "subtitle": "Unified Command Center | Analytics", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
@@ -507,7 +507,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         manager.disconnect(websocket)
 
 # ============================================
-# LOGIN HTML (dynamic year)
+# LOGIN HTML
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -774,7 +774,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (working chat, active users, live leaderboard, clickable pending/urgent, OSM map)
+# UNIFIED DASHBOARD HTML (OSM MAP WORKING, CHAT WORKING, ACTIVE USERS, LIVE LEADERBOARD)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1199,8 +1199,8 @@ async function loadAdminStats() {
             type: 'bar', data: { labels: data.by_crisis.map(d=>d.crisis), datasets: [{ label:'Reports', data:data.by_crisis.map(d=>d.count), backgroundColor:'#3498db', borderRadius:8 }] },
             options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td>${i+1}</td><td>${r.username}</td><td>${r.reports}</td></tr>`).join('');
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td>${r.role}</td><td>${r.count}</td></tr>`).join('');
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:8px;">${i+1}</td><td style="padding:8px;">${r.username}</td><td style="padding:8px;">${r.reports}</td>`).join('');
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:8px;">${r.role}</td><td style="padding:8px;">${r.count}</td>`).join('');
     } catch(e) { console.error(e); }
 }
 
@@ -1252,13 +1252,16 @@ document.getElementById('languageSelect').addEventListener('change', (e) => setL
 setLanguage(currentLang);
 
 function initMap() {
-    map = L.map('map').setView([20,0],2);
+    map = L.map('map').setView([20, 0], 2);
     map.attributionControl.setPrefix('');
-    // Use OpenStreetMap tiles (your original OSM map)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
+    // YOUR ORIGINAL OSM MAP TILES - WORKING
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '',
+        subdomains: 'abcd',
+        maxZoom: 19,
+        minZoom: 1
     }).addTo(map);
+    
     map.on('click', async function(e) {
         let lat = e.latlng.lat, lng = e.latlng.lng;
         document.getElementById('lat').value = lat.toFixed(6);
@@ -1270,12 +1273,15 @@ function initMap() {
                 document.getElementById('buildingName').value = building.name;
                 document.getElementById('selectedBuildingInfo').style.display = 'block';
                 document.getElementById('selectedBuildingInfo').innerHTML = `🏢 Selected: ${building.name}<br>📍 ${building.address || 'Address unknown'}`;
-            } else { document.getElementById('selectedBuildingInfo').style.display = 'none'; }
+            } else {
+                document.getElementById('selectedBuildingInfo').style.display = 'none';
+            }
         } catch(err) { console.error(err); }
         if(currentMarker) map.removeLayer(currentMarker);
-        currentMarker = L.marker([lat,lng]).addTo(map).bindPopup('Selected location').openPopup();
+        currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Selected location').openPopup();
     });
 }
+
 function shareLocation() {
     if(navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
         let lat = pos.coords.latitude, lng = pos.coords.longitude;
@@ -1285,6 +1291,7 @@ function shareLocation() {
         currentMarker = L.marker([lat,lng]).addTo(map).bindPopup('Your location').openPopup();
     });
 }
+
 async function sendSMSReport() {
     let smsText = document.getElementById('smsText').value, smsNumber = document.getElementById('smsNumber').value;
     let statusDiv = document.getElementById('smsStatus');
@@ -1297,6 +1304,7 @@ async function sendSMSReport() {
         else { statusDiv.innerHTML = '❌ '+data.message; }
     } catch(e) { statusDiv.innerHTML = '❌ Failed to send SMS'; }
 }
+
 document.getElementById('photo').addEventListener('change', function(e) {
     let preview = document.getElementById('photoPreview');
     if(e.target.files && e.target.files[0]) {
@@ -1305,6 +1313,7 @@ document.getElementById('photo').addEventListener('change', function(e) {
         reader.readAsDataURL(e.target.files[0]);
     } else { preview.innerHTML = ''; }
 });
+
 async function submitReport() {
     let fd = new FormData();
     fd.append('damage_level', document.getElementById('damageLevel').value);
@@ -1338,6 +1347,7 @@ async function submitReport() {
         saveOfflineQueue(); loadReports();
     }
 }
+
 async function syncOfflineReports() {
     if(offlineQueue.length===0) return;
     try {
@@ -1345,7 +1355,9 @@ async function syncOfflineReports() {
         if(res.ok) { offlineQueue = []; saveOfflineQueue(); loadReports(); showToast('Synced offline reports','success'); }
     } catch(e) { console.error(e); }
 }
+
 async function forceSync() { await syncOfflineReports(); }
+
 async function loadReports() {
     try {
         let res = await fetch('/api/reports');
@@ -1365,6 +1377,7 @@ async function loadReports() {
         updateCommandCenterCharts();
     }
 }
+
 function updateKPIs() {
     let total = reports.length;
     let critical = reports.filter(r=>r.damage_level==='complete').length;
@@ -1383,6 +1396,7 @@ function updateKPIs() {
     document.getElementById('standbyVolunteers').innerText = 100 + Math.floor(total/5);
     document.getElementById('offlineVolunteers').innerText = 50;
 }
+
 function updateMapMarkers() {
     for(let m of markers) map.removeLayer(m);
     markers = [];
@@ -1397,6 +1411,7 @@ function updateMapMarkers() {
         }
     }
 }
+
 function updateReportsList() {
     let container = document.getElementById('reportsList');
     if(!container) return;
@@ -1409,11 +1424,13 @@ function updateReportsList() {
         container.appendChild(div);
     });
 }
+
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
     if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
     else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
+
 async function loadCurrentUser() {
     try {
         let res = await fetch('/api/current_user');
@@ -1425,6 +1442,7 @@ async function loadCurrentUser() {
         connectWebSocket();
     } catch(e) { console.error('Auth error',e); }
 }
+
 function connectWebSocket() {
     if(ws && ws.readyState === WebSocket.OPEN) return;
     let protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -1444,6 +1462,7 @@ function connectWebSocket() {
     ws.onclose = () => { console.log('WebSocket closed, reconnecting...'); setTimeout(connectWebSocket,3000); };
     ws.onerror = (error) => { console.error('WebSocket error',error); ws.close(); };
 }
+
 function updatePresence(users, count) {
     let container = document.getElementById('presenceList');
     let countSpan = document.getElementById('presenceCount');
@@ -1451,7 +1470,9 @@ function updatePresence(users, count) {
     if(!container) return;
     container.innerHTML = users.map(u => `<div class="presence-user"><span>${u.avatar||'👤'}</span><span>${u.username}</span><span class="online-dot"></span></div>`).join('');
 }
+
 function updateLiveContributors(contributors) { /* optional */ }
+
 function sendChatMessage() {
     let input = document.getElementById('chatInput');
     let msg = input.value.trim();
@@ -1459,6 +1480,7 @@ function sendChatMessage() {
     ws.send(JSON.stringify({ type:'chat', message:msg }));
     input.value = '';
 }
+
 function addChatMessage(msg) {
     let container = document.getElementById('chatMessages');
     if(!container) return;
@@ -1468,6 +1490,7 @@ function addChatMessage(msg) {
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
+
 async function loadLeaderboard() {
     try {
         let res = await fetch('/api/leaderboard');
@@ -1477,13 +1500,19 @@ async function loadLeaderboard() {
         container.innerHTML = leaders.map((l,i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
     } catch(e) { console.error(e); }
 }
+
 async function loadStats() { try { let res=await fetch('/api/stats'); let stats=await res.json(); document.getElementById('totalReports').innerText=stats.total_reports; document.getElementById('todayReports').innerText=stats.today_reports; document.getElementById('pendingSync').innerText=stats.pending_sync; } catch(e){} }
+
 async function loadUserStats() {}
+
 function exportCSV() { window.open('/api/reports/csv','_blank'); }
+
 async function exportGeoJSON() {
     try { let res=await fetch('/api/reports/geojson'); let data=await res.json(); let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='reports.geojson'; a.click(); URL.revokeObjectURL(url); } catch(e){ alert('Export failed'); }
 }
+
 function showToast(msg,type) { alert(msg); }
+
 function togglePresence() { let el=document.querySelector('.presence-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 function toggleChat() { let el=document.querySelector('.chat-messages'); if(el) el.style.display=el.style.display==='none'?'flex':'none'; }
 function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
@@ -1492,11 +1521,12 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
-    let msg = 'Pending reports to sync:\n';
-    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
-    msg += '\nClick OK to sync now.';
+    let msg = 'Pending reports to sync:\\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\\n`; });
+    msg += '\\nClick OK to sync now.';
     if(confirm(msg)) forceSync();
 });
+
 let urgentElement = document.getElementById('urgentTasks');
 if(urgentElement && urgentElement.parentElement && urgentElement.parentElement.parentElement) {
     urgentElement.parentElement.parentElement.addEventListener('click', function() {
