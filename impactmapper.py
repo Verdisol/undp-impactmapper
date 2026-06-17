@@ -774,7 +774,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (FIXED CHAT)
+# UNIFIED DASHBOARD HTML (FIXED: chat uses existing WebSocket)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1294,7 +1294,7 @@ UNIFIED_DASHBOARD_HTML = """
 
 <div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
 
-<!-- GLOWING + DRAGGABLE CHAT PANEL -->
+<!-- GLOWING + DRAGGABLE CHAT PANEL (uses existing ws connection) -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -1303,7 +1303,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div id="chatMessages" class="chat-messages">
         <div class="chat-message other">
             <span class="msg-username">🚀 System</span>
-            Waiting for connection…
+            Connected – start chatting!
         </div>
     </div>
     <div class="chat-input-area">
@@ -1618,8 +1618,6 @@ async function loadCurrentUser() {
         if(user.role === 'admin') { document.getElementById('exportCard').style.display = 'block'; document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; isAdmin=true; }
         else { document.getElementById('exportCard').style.display = 'none'; isAdmin=false; }
         connectWebSocket();
-        // Start chat connection after user is loaded
-        connectChatWebSocket();
     } catch(e) { console.error('Auth error',e); }
 }
 
@@ -1653,10 +1651,14 @@ function updatePresence(users, count) {
 
 function updateLiveContributors(contributors) { /* optional */ }
 
+// ----- CHAT FUNCTIONS (use the existing ws) -----
 function sendChatMessage() {
     let input = document.getElementById('chatInput');
     let msg = input.value.trim();
-    if(!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if(!msg || !ws || ws.readyState !== WebSocket.OPEN) {
+        alert('Chat not connected. Please wait.');
+        return;
+    }
     ws.send(JSON.stringify({ type:'chat', message:msg }));
     input.value = '';
 }
@@ -1664,12 +1666,26 @@ function sendChatMessage() {
 function addChatMessage(msg) {
     let container = document.getElementById('chatMessages');
     if(!container) return;
+    // Remove any "Connected" system message if it's the only one and we have real messages
+    if (container.children.length === 1 && container.children[0].innerText.includes('Connected')) {
+        container.innerHTML = '';
+    }
     let div = document.createElement('div');
     div.className = msg.username === currentUser.username ? 'chat-message own' : 'chat-message other';
-    div.innerHTML = `<strong>${msg.username}</strong> (${msg.role})<br>${msg.message}<br><small>${new Date(msg.timestamp).toLocaleTimeString()}</small>`;
+    div.innerHTML = `<span class="msg-username">${msg.username} <span class="msg-time">${new Date(msg.timestamp).toLocaleTimeString()}</span></span>${msg.message}`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
+
+// Bind chat events to the glowing panel
+document.addEventListener('DOMContentLoaded', function() {
+    const sendBtn = document.getElementById('chatSendBtn');
+    const input = document.getElementById('chatInput');
+    if (sendBtn) sendBtn.addEventListener('click', sendChatMessage);
+    if (input) input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+});
 
 async function loadLeaderboard() {
     try {
@@ -1740,9 +1756,8 @@ setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  NEW GLOWING + DRAGGABLE CHAT (FIXED: connects only after user loads)
+//  DRAGGABLE CHAT (only drag, no separate WS)
 // ================================================================
-
 (function initDragChat() {
     const container = document.getElementById('glowChat');
     const header = document.getElementById('chatDragHandle');
@@ -1779,137 +1794,6 @@ setInterval(() => loadLeaderboard(), 10000);
         }
     });
 })();
-
-// ----- CHAT WEBSOCKET (separate from presence ws) -----
-let chatWs = null;
-let chatReconnectTimer = null;
-let chatConnecting = false;
-
-function connectChatWebSocket() {
-    // Prevent multiple simultaneous connection attempts
-    if (chatConnecting) return;
-    if (!currentUser || !currentUser.username) {
-        // Retry after a short delay
-        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
-        chatReconnectTimer = setTimeout(connectChatWebSocket, 1000);
-        return;
-    }
-    // Close existing connection if any
-    if (chatWs) {
-        try { chatWs.close(); } catch(e) {}
-        chatWs = null;
-    }
-    chatConnecting = true;
-
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${window.location.host}/ws/${currentUser.username}`;
-    console.log('Attempting chat WebSocket connection to:', wsUrl);
-
-    try {
-        chatWs = new WebSocket(wsUrl);
-    } catch (e) {
-        console.error('Chat WS creation error:', e);
-        chatConnecting = false;
-        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
-        chatReconnectTimer = setTimeout(connectChatWebSocket, 3000);
-        return;
-    }
-
-    chatWs.onopen = function() {
-        console.log('Chat WebSocket connected');
-        chatConnecting = false;
-        const container = document.getElementById('chatMessages');
-        if (container) {
-            // Remove old "waiting" message if present
-            if (container.children.length > 0 && container.children[0].innerText.includes('Waiting')) {
-                container.innerHTML = '';
-            }
-            const sysMsg = document.createElement('div');
-            sysMsg.className = 'chat-message other';
-            sysMsg.innerHTML = `<span class="msg-username">🚀 System</span>Connected to command center.`;
-            container.appendChild(sysMsg);
-            container.scrollTop = container.scrollHeight;
-        }
-        if (chatReconnectTimer) { clearTimeout(chatReconnectTimer); chatReconnectTimer = null; }
-    };
-
-    chatWs.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'chat' && data.data) {
-                addChatMessageGlow(data.data);
-            }
-        } catch (e) {
-            // ignore non-JSON
-        }
-    };
-
-    chatWs.onclose = function(event) {
-        console.log('Chat WS closed, reason:', event.reason);
-        chatConnecting = false;
-        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
-        chatReconnectTimer = setTimeout(connectChatWebSocket, 3000);
-    };
-
-    chatWs.onerror = function(err) {
-        console.error('Chat WS error:', err);
-        // Show error in chat
-        const container = document.getElementById('chatMessages');
-        if (container) {
-            const errMsg = document.createElement('div');
-            errMsg.className = 'chat-message other';
-            errMsg.innerHTML = `<span class="msg-username">⚠️ System</span>Connection error. Retrying...`;
-            container.appendChild(errMsg);
-            container.scrollTop = container.scrollHeight;
-        }
-        // The onclose will handle reconnection
-        chatWs.close();
-    };
-}
-
-function addChatMessageGlow(msg) {
-    const container = document.getElementById('chatMessages');
-    if (!container) return;
-    const div = document.createElement('div');
-    const isOwn = msg.username === currentUser.username;
-    div.className = `chat-message ${isOwn ? 'own' : 'other'}`;
-    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
-    div.innerHTML = `<span class="msg-username">${msg.username || 'Anonymous'} <span class="msg-time">${time}</span></span>${msg.message || ''}`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    while (container.children.length > 200) {
-        container.removeChild(container.firstChild);
-    }
-}
-
-function sendChatMessageGlow() {
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
-    if (!text) return;
-    if (!chatWs || chatWs.readyState !== WebSocket.OPEN) {
-        alert('Chat not connected. Please wait.');
-        // Force reconnect
-        connectChatWebSocket();
-        return;
-    }
-    chatWs.send(JSON.stringify({ type: 'chat', message: text }));
-    addChatMessageGlow({ username: currentUser.username, message: text, timestamp: new Date().toISOString() });
-    input.value = '';
-}
-
-// Bind glow chat events (but only after DOM is ready)
-document.addEventListener('DOMContentLoaded', function() {
-    const sendBtn = document.getElementById('chatSendBtn');
-    const input = document.getElementById('chatInput');
-    if (sendBtn) sendBtn.addEventListener('click', sendChatMessageGlow);
-    if (input) input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') sendChatMessageGlow();
-    });
-    // Connection will be initiated by loadCurrentUser
-});
-
-// Also, if currentUser is already set (e.g., after login redirect), we may need to connect
-// but loadCurrentUser will call it anyway.
 </script>
 </body>
 </html>
