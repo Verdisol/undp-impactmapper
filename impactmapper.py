@@ -774,7 +774,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (OSM MAP WORKING, CHAT WORKING, ACTIVE USERS, LIVE LEADERBOARD)
+# UNIFIED DASHBOARD HTML (UPDATED WITH GLOWING CHAT)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -805,6 +805,176 @@ UNIFIED_DASHBOARD_HTML = """
             --warning: #f39c12;
             --info: #3498db;
         }
+
+        /* ----- GLOWING + DRAGGABLE CHAT OVERRIDES ----- */
+        .chat-panel {
+            position: fixed !important;
+            bottom: 20px !important;
+            left: 20px !important;
+            width: 340px !important;
+            max-height: 480px !important;
+            background: rgba(18, 25, 40, 0.95) !important;
+            backdrop-filter: blur(14px) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(0, 255, 200, 0.3) !important;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.25), 0 0 70px rgba(0, 255, 200, 0.1), inset 0 0 30px rgba(0, 255, 200, 0.04) !important;
+            animation: pulseGlowChat 2.8s ease-in-out infinite alternate !important;
+            cursor: grab !important;
+            z-index: 9999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            transition: box-shadow 0.3s ease !important;
+        }
+        .chat-panel:hover {
+            box-shadow: 0 0 45px rgba(0, 255, 200, 0.45), 0 0 90px rgba(0, 255, 200, 0.2), inset 0 0 40px rgba(0, 255, 200, 0.06) !important;
+        }
+        .chat-panel:active { cursor: grabbing !important; }
+        @keyframes pulseGlowChat {
+            0% { box-shadow: 0 0 20px rgba(0,255,200,0.15), 0 0 40px rgba(0,255,200,0.06); }
+            100% { box-shadow: 0 0 45px rgba(0,255,200,0.45), 0 0 80px rgba(0,255,200,0.2), inset 0 0 30px rgba(0,255,200,0.04); }
+        }
+        .chat-header {
+            padding: 14px 18px !important;
+            background: rgba(0,255,200,0.06) !important;
+            border-bottom: 1px solid rgba(0,255,200,0.12) !important;
+            border-radius: 20px 20px 0 0 !important;
+            cursor: grab !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
+        }
+        .chat-header:active { cursor: grabbing !important; }
+        .chat-header h4 {
+            color: #00ffcc !important;
+            font-size: 0.9rem !important;
+            font-weight: 700 !important;
+            letter-spacing: 1px !important;
+            text-shadow: 0 0 18px rgba(0,255,200,0.3) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+        .chat-header .pulse-dot {
+            display: inline-block !important;
+            width: 10px !important;
+            height: 10px !important;
+            background: #00ffcc !important;
+            border-radius: 50% !important;
+            box-shadow: 0 0 18px #00ffcc !important;
+            animation: blinkDotChat 1.2s infinite !important;
+        }
+        @keyframes blinkDotChat {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.15; }
+        }
+        .chat-header .status-badge {
+            font-size: 0.7rem !important;
+            background: rgba(0,255,200,0.12) !important;
+            padding: 2px 12px !important;
+            border-radius: 30px !important;
+            color: #aaffee !important;
+            border: 1px solid rgba(0,255,200,0.15) !important;
+        }
+        .chat-messages {
+            flex: 1 !important;
+            padding: 10px 14px !important;
+            overflow-y: auto !important;
+            max-height: 280px !important;
+            min-height: 160px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 5px !important;
+            scroll-behavior: smooth !important;
+            background: transparent !important;
+        }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #00ffcc;
+            border-radius: 10px;
+            box-shadow: 0 0 12px #00ffcc;
+        }
+        .chat-message {
+            padding: 6px 12px !important;
+            border-radius: 14px !important;
+            max-width: 85% !important;
+            font-size: 0.75rem !important;
+            line-height: 1.4 !important;
+            animation: fadeInMsg 0.2s ease !important;
+        }
+        .chat-message.own {
+            align-self: flex-end !important;
+            background: rgba(0,255,200,0.16) !important;
+            border: 1px solid rgba(0,255,200,0.2) !important;
+            color: #e0faf5 !important;
+            border-bottom-right-radius: 4px !important;
+        }
+        .chat-message.other {
+            align-self: flex-start !important;
+            background: rgba(255,255,255,0.06) !important;
+            border: 1px solid rgba(255,255,255,0.06) !important;
+            color: #cdd9e6 !important;
+            border-bottom-left-radius: 4px !important;
+        }
+        .chat-message .msg-username {
+            font-weight: 700 !important;
+            color: #00ffcc !important;
+            font-size: 0.7rem !important;
+            display: block !important;
+            margin-bottom: 2px !important;
+        }
+        .chat-message .msg-time {
+            font-size: 0.6rem !important;
+            opacity: 0.4 !important;
+            margin-left: 8px !important;
+        }
+        .chat-input-area {
+            padding: 8px 14px 14px 14px !important;
+            border-top: 1px solid rgba(0,255,200,0.08) !important;
+            display: flex !important;
+            gap: 8px !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
+            background: transparent !important;
+        }
+        .chat-input-area input {
+            flex: 1 !important;
+            padding: 8px 14px !important;
+            border-radius: 30px !important;
+            border: 1px solid rgba(0,255,200,0.15) !important;
+            background: rgba(0,0,0,0.45) !important;
+            color: #fff !important;
+            font-size: 0.75rem !important;
+            outline: none !important;
+        }
+        .chat-input-area input:focus {
+            border-color: #00ffcc !important;
+            box-shadow: 0 0 25px rgba(0,255,200,0.12) !important;
+        }
+        .chat-input-area button {
+            padding: 8px 18px !important;
+            border-radius: 30px !important;
+            border: none !important;
+            background: #00ffcc !important;
+            color: #0b0e14 !important;
+            font-weight: 700 !important;
+            font-size: 0.75rem !important;
+            cursor: pointer !important;
+            box-shadow: 0 0 28px rgba(0,255,200,0.15) !important;
+            transition: 0.2s !important;
+            white-space: nowrap !important;
+            width: auto !important;
+            margin: 0 !important;
+        }
+        .chat-input-area button:hover {
+            transform: scale(1.05) !important;
+            box-shadow: 0 0 45px rgba(0,255,200,0.35) !important;
+        }
+        .chat-input-area button:active {
+            transform: scale(0.96) !important;
+        }
+
         .tabs-container {
             background: var(--bg-card);
             padding: 0 24px;
@@ -992,7 +1162,7 @@ UNIFIED_DASHBOARD_HTML = """
         .sms-card { background: rgba(46,204,113,0.08); padding: 8px; border-radius: 8px; margin-top: 8px; }
         .photo-preview { margin-top: 8px; text-align: center; }
         .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
-        .presence-panel, .chat-panel, .leaderboard-panel {
+        .presence-panel, .leaderboard-panel {
             position: fixed;
             background: rgba(30,30,30,0.95);
             backdrop-filter: blur(12px);
@@ -1000,9 +1170,8 @@ UNIFIED_DASHBOARD_HTML = """
             z-index: 1000;
         }
         .presence-panel { bottom: 15px; right: 15px; width: 220px; border: 1px solid rgba(46,204,113,0.2); }
-        .chat-panel { bottom: 15px; left: 15px; width: 260px; border: 1px solid rgba(52,152,219,0.2); }
         .leaderboard-panel { bottom: 15px; right: 250px; width: 200px; border: 1px solid rgba(243,156,18,0.2); }
-        .presence-header, .chat-header, .leaderboard-header {
+        .presence-header, .leaderboard-header {
             padding: 8px;
             border-radius: 10px 10px 0 0;
             display: flex;
@@ -1012,7 +1181,6 @@ UNIFIED_DASHBOARD_HTML = """
             font-weight: 600;
         }
         .presence-header { background: rgba(46,204,113,0.08); }
-        .chat-header { background: rgba(52,152,219,0.08); }
         .leaderboard-header { background: rgba(243,156,18,0.08); }
         .presence-list, .leaderboard-list { max-height: 140px; overflow-y: auto; padding: 6px; }
         .presence-user, .leaderboard-item {
@@ -1028,13 +1196,6 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .presence-user:hover, .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
         .online-dot { width: 6px; height: 6px; border-radius: 50%; background: #2ecc71; margin-left: auto; animation: pulse 2s infinite; }
-        .chat-messages { height: 180px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
-        .chat-message { padding: 6px 10px; border-radius: 10px; font-size: 0.65rem; max-width: 85%; }
-        .chat-message.own { background: rgba(255, 255, 255, 0.9); align-self: flex-end; border-left: 2px solid #2ecc71; color: #1a1a1a; }
-        .chat-message.other { background: rgba(240, 240, 240, 0.9); align-self: flex-start; color: #1a1a1a; }
-        .chat-input-area { display: flex; padding: 8px; gap: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
-        .chat-input-area input { flex: 1; margin: 0; padding: 6px 8px; background: #2a2a2a; }
-        .chat-input-area button { width: auto; padding: 6px 12px; margin: 0; }
         .rank { width: 25px; font-weight: 700; color: #f39c12; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
         @media (max-width: 1000px) {
@@ -1132,7 +1293,25 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
-<div class="chat-panel"><div class="chat-header" onclick="toggleChat()"><span><i class="fas fa-comment-dots"></i> Crisis Chat</span><span>💬</span></div><div id="chatMessages" class="chat-messages"></div><div class="chat-input-area"><input type="text" id="chatInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendChatMessage()"><button onclick="sendChatMessage()">Send</button></div></div>
+
+<!-- GLOWING + DRAGGABLE CHAT PANEL -->
+<div class="chat-panel" id="glowChat">
+    <div class="chat-header" id="chatDragHandle">
+        <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
+        <div class="status-badge">● Live</div>
+    </div>
+    <div id="chatMessages" class="chat-messages">
+        <div class="chat-message other">
+            <span class="msg-username">🚀 System</span>
+            Waiting for connection…
+        </div>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="chatInput" placeholder="Type a message…" autocomplete="off">
+        <button id="chatSendBtn">Send</button>
+    </div>
+</div>
+
 <div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
 
 <script>
@@ -1254,7 +1433,6 @@ setLanguage(currentLang);
 function initMap() {
     map = L.map('map').setView([20, 0], 2);
     map.attributionControl.setPrefix('');
-    // YOUR ORIGINAL OSM MAP TILES - WORKING
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '',
         subdomains: 'abcd',
@@ -1514,7 +1692,6 @@ async function exportGeoJSON() {
 function showToast(msg,type) { alert(msg); }
 
 function togglePresence() { let el=document.querySelector('.presence-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
-function toggleChat() { let el=document.querySelector('.chat-messages'); if(el) el.style.display=el.style.display==='none'?'flex':'none'; }
 function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 
 // Click handlers for pending tasks and urgent tasks
@@ -1559,6 +1736,152 @@ setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
+
+// ================================================================
+//  NEW GLOWING + DRAGGABLE CHAT (separate WebSocket, fully working)
+// ================================================================
+
+(function initDragChat() {
+    const container = document.getElementById('glowChat');
+    const header = document.getElementById('chatDragHandle');
+    if (!container || !header) return;
+    let isDragging = false, offX = 0, offY = 0;
+    header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
+        isDragging = true;
+        const rect = container.getBoundingClientRect();
+        offX = e.clientX - rect.left;
+        offY = e.clientY - rect.top;
+        container.style.cursor = 'grabbing';
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        let newX = e.clientX - offX;
+        let newY = e.clientY - offY;
+        const maxX = window.innerWidth - container.offsetWidth;
+        const maxY = window.innerHeight - container.offsetHeight;
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+        container.style.left = newX + 'px';
+        container.style.top = newY + 'px';
+        container.style.bottom = 'auto';
+        container.style.right = 'auto';
+    });
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            container.style.cursor = 'grab';
+            header.style.cursor = 'grab';
+        }
+    });
+})();
+
+// ----- CHAT WEBSOCKET (separate from presence ws) -----
+let chatWs = null;
+let chatReconnectTimer = null;
+
+function connectChatWebSocket() {
+    if (!currentUser || !currentUser.username) {
+        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = setTimeout(connectChatWebSocket, 1000);
+        return;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}/ws/${currentUser.username}`;
+    try {
+        chatWs = new WebSocket(wsUrl);
+    } catch (e) {
+        console.error('Chat WS creation error:', e);
+        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = setTimeout(connectChatWebSocket, 3000);
+        return;
+    }
+
+    chatWs.onopen = function() {
+        console.log('Chat WebSocket connected');
+        const container = document.getElementById('chatMessages');
+        if (container) {
+            // Remove old "waiting" message if present
+            if (container.children.length > 0 && container.children[0].innerText.includes('Waiting')) {
+                container.innerHTML = '';
+            }
+            const sysMsg = document.createElement('div');
+            sysMsg.className = 'chat-message other';
+            sysMsg.innerHTML = `<span class="msg-username">🚀 System</span>Connected to command center.`;
+            container.appendChild(sysMsg);
+            container.scrollTop = container.scrollHeight;
+        }
+        if (chatReconnectTimer) { clearTimeout(chatReconnectTimer); chatReconnectTimer = null; }
+    };
+
+    chatWs.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'chat' && data.data) {
+                addChatMessageGlow(data.data);
+            }
+        } catch (e) {
+            // ignore non-JSON
+        }
+    };
+
+    chatWs.onclose = function() {
+        console.log('Chat WS closed, reconnecting...');
+        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = setTimeout(connectChatWebSocket, 3000);
+    };
+
+    chatWs.onerror = function(err) {
+        console.error('Chat WS error:', err);
+        chatWs.close();
+    };
+}
+
+function addChatMessageGlow(msg) {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    const div = document.createElement('div');
+    const isOwn = msg.username === currentUser.username;
+    div.className = `chat-message ${isOwn ? 'own' : 'other'}`;
+    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+    div.innerHTML = `<span class="msg-username">${msg.username || 'Anonymous'} <span class="msg-time">${time}</span></span>${msg.message || ''}`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    while (container.children.length > 200) {
+        container.removeChild(container.firstChild);
+    }
+}
+
+function sendChatMessageGlow() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    if (!chatWs || chatWs.readyState !== WebSocket.OPEN) {
+        alert('Chat not connected. Please wait.');
+        connectChatWebSocket();
+        return;
+    }
+    chatWs.send(JSON.stringify({ type: 'chat', message: text }));
+    addChatMessageGlow({ username: currentUser.username, message: text, timestamp: new Date().toISOString() });
+    input.value = '';
+}
+
+// Bind glow chat events
+document.addEventListener('DOMContentLoaded', function() {
+    const sendBtn = document.getElementById('chatSendBtn');
+    const input = document.getElementById('chatInput');
+    if (sendBtn) sendBtn.addEventListener('click', sendChatMessageGlow);
+    if (input) input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendChatMessageGlow();
+    });
+    setTimeout(connectChatWebSocket, 800);
+});
+
+if (typeof currentUser !== 'undefined' && currentUser && currentUser.username) {
+    setTimeout(connectChatWebSocket, 500);
+}
 </script>
 </body>
 </html>
