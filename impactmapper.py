@@ -435,7 +435,7 @@ async def update_user_location(lat: float, lng: float, current_user: dict = Depe
 async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
     return await get_reports_db(limit)
 
-# FIX: Allow reporters (not just admins) to export
+# Allow reporters (not just admins) to export
 @app.get("/api/reports/geojson")
 async def get_geojson(current_user: dict = Depends(require_reporter)):
     async with db_pool.acquire() as conn:
@@ -453,7 +453,7 @@ async def get_geojson(current_user: dict = Depends(require_reporter)):
             })
     return {"type": "FeatureCollection", "features": features}
 
-# FIX: Allow reporters (not just admins) to export
+# Allow reporters (not just admins) to export
 @app.get("/api/reports/csv")
 async def export_csv(current_user: dict = Depends(require_reporter)):
     async with db_pool.acquire() as conn:
@@ -776,7 +776,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (FIXED: export visible, chat draggable)
+# UNIFIED DASHBOARD HTML (SIMPLIFIED CHAT, NO EXTRA CONNECTION)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1259,7 +1259,6 @@ UNIFIED_DASHBOARD_HTML = """
             <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
-            <!-- Export Card - now visible for reporters and admins -->
             <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data</span></h3>
             <div style="display:flex; gap:8px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">Export CSV</span></button>
             <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">Export GeoJSON</span></button></div></div>
@@ -1297,7 +1296,7 @@ UNIFIED_DASHBOARD_HTML = """
 
 <div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
 
-<!-- GLOWING + DRAGGABLE CHAT PANEL -->
+<!-- GLOWING + DRAGGABLE CHAT PANEL (uses existing ws) -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -1306,7 +1305,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div id="chatMessages" class="chat-messages">
         <div class="chat-message other">
             <span class="msg-username">🚀 System</span>
-            Connected – start chatting!
+            Chat ready.
         </div>
     </div>
     <div class="chat-input-area">
@@ -1618,7 +1617,6 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        // Show export card for reporters and admins
         if(user.role === 'admin' || user.role === 'reporter') {
             document.getElementById('exportCard').style.display = 'block';
         } else {
@@ -1664,12 +1662,13 @@ function updatePresence(users, count) {
 
 function updateLiveContributors(contributors) { /* optional */ }
 
-// ----- CHAT FUNCTIONS (use the existing ws) -----
+// ----- SIMPLE CHAT SEND (uses main ws, no extra connection) -----
 function sendChatMessage() {
     let input = document.getElementById('chatInput');
     let msg = input.value.trim();
-    if(!msg || !ws || ws.readyState !== WebSocket.OPEN) {
-        alert('Chat not connected. Please wait.');
+    if(!msg) return;
+    if(!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('Not connected to chat server.');
         return;
     }
     ws.send(JSON.stringify({ type:'chat', message:msg }));
@@ -1679,8 +1678,8 @@ function sendChatMessage() {
 function addChatMessage(msg) {
     let container = document.getElementById('chatMessages');
     if(!container) return;
-    // Remove any "Connected" system message if it's the only one and we have real messages
-    if (container.children.length === 1 && container.children[0].innerText.includes('Connected')) {
+    // Remove system message if it's the only one
+    if (container.children.length === 1 && container.children[0].innerText.includes('Chat ready')) {
         container.innerHTML = '';
     }
     let div = document.createElement('div');
@@ -1690,7 +1689,7 @@ function addChatMessage(msg) {
     container.scrollTop = container.scrollHeight;
 }
 
-// Bind chat events to the glowing panel
+// Bind chat events
 document.addEventListener('DOMContentLoaded', function() {
     const sendBtn = document.getElementById('chatSendBtn');
     const input = document.getElementById('chatInput');
@@ -1712,8 +1711,6 @@ async function loadLeaderboard() {
 
 async function loadStats() { try { let res=await fetch('/api/stats'); let stats=await res.json(); document.getElementById('totalReports').innerText=stats.total_reports; document.getElementById('todayReports').innerText=stats.today_reports; document.getElementById('pendingSync').innerText=stats.pending_sync; } catch(e){} }
 
-async function loadUserStats() {}
-
 function exportCSV() { window.open('/api/reports/csv','_blank'); }
 
 async function exportGeoJSON() {
@@ -1725,7 +1722,7 @@ function showToast(msg,type) { alert(msg); }
 function togglePresence() { let el=document.querySelector('.presence-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 
-// Click handlers for pending tasks and urgent tasks
+// Click handlers
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
@@ -1762,14 +1759,13 @@ loadCurrentUser();
 loadReports();
 loadLeaderboard();
 loadStats();
-loadUserStats();
 setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  DRAGGABLE CHAT (drag the header anywhere on the map)
+//  DRAGGABLE CHAT (drag the header anywhere)
 // ================================================================
 (function initDragChat() {
     const container = document.getElementById('glowChat');
