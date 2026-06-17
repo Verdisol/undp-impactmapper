@@ -435,8 +435,9 @@ async def update_user_location(lat: float, lng: float, current_user: dict = Depe
 async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
     return await get_reports_db(limit)
 
+# FIX: Allow reporters (not just admins) to export
 @app.get("/api/reports/geojson")
-async def get_geojson(current_user: dict = Depends(require_admin)):
+async def get_geojson(current_user: dict = Depends(require_reporter)):
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("SELECT damage_level, lat, lng, infrastructure_type, crisis_nature, building_name, timestamp FROM reports WHERE lat != 0 AND is_current = 1")
     features = []
@@ -452,8 +453,9 @@ async def get_geojson(current_user: dict = Depends(require_admin)):
             })
     return {"type": "FeatureCollection", "features": features}
 
+# FIX: Allow reporters (not just admins) to export
 @app.get("/api/reports/csv")
-async def export_csv(current_user: dict = Depends(require_admin)):
+async def export_csv(current_user: dict = Depends(require_reporter)):
     async with db_pool.acquire() as conn:
         rows = await conn.fetch("SELECT damage_level, lat, lng, building_name, building_address, infrastructure_type, crisis_nature, debris, notes, timestamp, username FROM reports WHERE is_current = 1 ORDER BY timestamp DESC")
     csv = "Damage Level,Latitude,Longitude,Building Name,Building Address,Infrastructure Type,Crisis Nature,Debris,Notes,Timestamp,Username\n"
@@ -774,7 +776,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (FIXED: chat uses existing WebSocket)
+# UNIFIED DASHBOARD HTML (FIXED: export visible, chat draggable)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1257,7 +1259,8 @@ UNIFIED_DASHBOARD_HTML = """
             <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
-            <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
+            <!-- Export Card - now visible for reporters and admins -->
+            <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data</span></h3>
             <div style="display:flex; gap:8px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">Export CSV</span></button>
             <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">Export GeoJSON</span></button></div></div>
         </div>
@@ -1294,7 +1297,7 @@ UNIFIED_DASHBOARD_HTML = """
 
 <div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
 
-<!-- GLOWING + DRAGGABLE CHAT PANEL (uses existing ws connection) -->
+<!-- GLOWING + DRAGGABLE CHAT PANEL -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -1420,7 +1423,7 @@ function updateUITexts() {
     document.getElementById('smsTitle').innerText = translations.sms_report || 'SMS Report';
     document.getElementById('smsSendLabel').innerText = translations.sms_send || 'Send SMS Report';
     document.getElementById('recentTitle').innerText = translations.recent_reports || 'Recent Reports';
-    document.getElementById('exportTitle').innerText = translations.export_data || 'Export Data (Admin Only)';
+    document.getElementById('exportTitle').innerText = translations.export_data || 'Export Data';
     document.getElementById('csvLabel').innerText = translations.export_csv || 'Export CSV';
     document.getElementById('geojsonLabel').innerText = translations.export_geojson || 'Export GeoJSON';
     document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
@@ -1615,8 +1618,18 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        if(user.role === 'admin') { document.getElementById('exportCard').style.display = 'block'; document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; isAdmin=true; }
-        else { document.getElementById('exportCard').style.display = 'none'; isAdmin=false; }
+        // Show export card for reporters and admins
+        if(user.role === 'admin' || user.role === 'reporter') {
+            document.getElementById('exportCard').style.display = 'block';
+        } else {
+            document.getElementById('exportCard').style.display = 'none';
+        }
+        if(user.role === 'admin') {
+            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
+            isAdmin = true;
+        } else {
+            isAdmin = false;
+        }
         connectWebSocket();
     } catch(e) { console.error('Auth error',e); }
 }
@@ -1756,7 +1769,7 @@ setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  DRAGGABLE CHAT (only drag, no separate WS)
+//  DRAGGABLE CHAT (drag the header anywhere on the map)
 // ================================================================
 (function initDragChat() {
     const container = document.getElementById('glowChat');
