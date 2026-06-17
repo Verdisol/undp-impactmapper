@@ -1,783 +1,3 @@
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import uvicorn
-import os
-import json
-import hashlib
-import uuid
-import asyncio
-import urllib.request
-import urllib.parse
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict
-import asyncpg
-from contextlib import asynccontextmanager
-
-# ============================================
-# FIX: Use /tmp for writable storage on Vercel
-# ============================================
-PHOTOS_DIR = "/tmp/photos"
-EXPORTS_DIR = "/tmp/exports"
-os.makedirs(PHOTOS_DIR, exist_ok=True)
-os.makedirs(EXPORTS_DIR, exist_ok=True)
-
-security = HTTPBasic()
-
-# Database connection pool
-db_pool = None
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-async def init_db():
-    global db_pool
-    db_pool = await asyncpg.create_pool(DATABASE_URL)
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS reports (
-                id SERIAL PRIMARY KEY,
-                report_uuid TEXT UNIQUE NOT NULL,
-                building_id TEXT,
-                building_osm_id TEXT,
-                building_name TEXT,
-                building_address TEXT,
-                damage_level TEXT,
-                version INTEGER DEFAULT 1,
-                photo_path TEXT,
-                lat REAL,
-                lng REAL,
-                location_text TEXT,
-                infrastructure_type TEXT,
-                crisis_nature TEXT,
-                debris TEXT,
-                notes TEXT,
-                username TEXT,
-                timestamp TEXT,
-                is_current INTEGER DEFAULT 1,
-                synced INTEGER DEFAULT 1,
-                sms_number TEXT
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT DEFAULT 'viewer',
-                avatar TEXT DEFAULT '🌍',
-                color TEXT DEFAULT '#2ecc71',
-                points INTEGER DEFAULT 0,
-                verified_reports INTEGER DEFAULT 0,
-                badge_level TEXT DEFAULT 'Citizen Reporter',
-                created_at TEXT,
-                phone_number TEXT
-            )
-        """)
-        default_users = [
-            ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin", "👑", "#e74c3c", 5000, 250, "🏆 Master Responder", "+1234567890"),
-            ("reporter", hashlib.sha256("report123".encode()).hexdigest(), "reporter", "📸", "#2ecc71", 1250, 65, "⭐ Senior Responder", "+1234567891"),
-            ("viewer", hashlib.sha256("view123".encode()).hexdigest(), "viewer", "👁️", "#3498db", 0, 0, "🆕 Citizen Reporter", ""),
-        ]
-        for user in default_users:
-            await conn.execute("""
-                INSERT INTO users (username, password_hash, role, avatar, color, points, verified_reports, badge_level, created_at, phone_number)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ON CONFLICT (username) DO NOTHING
-            """, *user + (datetime.now().isoformat(),))
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    yield
-    if db_pool:
-        await db_pool.close()
-
-app = FastAPI(title="UNDP ImpactMapper", version="27.0.0", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ============================================
-# WEBSOCKET MANAGER
-# ============================================
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[WebSocket, Dict] = {}
-        self.user_locations: Dict[str, Dict] = {}
-        self.chat_messages: List[Dict] = []
-        
-    async def connect(self, websocket: WebSocket, user_info: dict):
-        await websocket.accept()
-        self.active_connections[websocket] = user_info
-        await self.broadcast_presence()
-        await self.broadcast_live_contributors()
-        
-    def disconnect(self, websocket: WebSocket):
-        username = self.active_connections.get(websocket, {}).get("username")
-        if username and username in self.user_locations:
-            del self.user_locations[username]
-        if websocket in self.active_connections:
-            del self.active_connections[websocket]
-        asyncio.create_task(self.broadcast_presence())
-        asyncio.create_task(self.broadcast_live_contributors())
-        
-    async def update_user_location(self, username: str, lat: float, lng: float):
-        self.user_locations[username] = {"lat": lat, "lng": lng, "updated_at": datetime.now().isoformat()}
-        await self.broadcast_live_contributors()
-        
-    async def broadcast_presence(self):
-        presence_list = []
-        for ws, info in self.active_connections.items():
-            presence_list.append({
-                "username": info.get("username", "Anonymous"),
-                "role": info.get("role", "viewer"),
-                "color": info.get("color", "#2ecc71"),
-                "avatar": info.get("avatar", "🌍"),
-                "badge": info.get("badge", "Citizen Reporter"),
-                "points": info.get("points", 0)
-            })
-        await self.broadcast({"type": "presence", "users": presence_list, "count": len(presence_list)})
-        
-    async def broadcast_live_contributors(self):
-        contributors = []
-        for username, location in self.user_locations.items():
-            user_info = None
-            for ws, info in self.active_connections.items():
-                if info.get("username") == username:
-                    user_info = info
-                    break
-            if user_info and location:
-                contributors.append({
-                    "username": username, "role": user_info.get("role", "viewer"),
-                    "color": user_info.get("color", "#2ecc71"), "avatar": user_info.get("avatar", "🌍"),
-                    "badge": user_info.get("badge", "Citizen Reporter"), "points": user_info.get("points", 0),
-                    "lat": location["lat"], "lng": location["lng"]
-                })
-        await self.broadcast({"type": "live_contributors", "contributors": contributors})
-        
-    async def broadcast_chat(self, message: str, sender_ws: WebSocket):
-        if sender_ws in self.active_connections:
-            chat_msg = {
-                "username": self.active_connections[sender_ws].get("username", "Anonymous"),
-                "role": self.active_connections[sender_ws].get("role", "viewer"),
-                "message": message, "timestamp": datetime.now().isoformat(),
-                "color": self.active_connections[sender_ws].get("color", "#2ecc71"),
-                "badge": self.active_connections[sender_ws].get("badge", "Citizen Reporter")
-            }
-            self.chat_messages.append(chat_msg)
-            if len(self.chat_messages) > 200:
-                self.chat_messages = self.chat_messages[-200:]
-            await self.broadcast({"type": "chat", "data": chat_msg})
-            
-    async def broadcast_report(self, report_data: dict):
-        await self.broadcast({"type": "new_report", "data": report_data})
-            
-    async def broadcast(self, message: dict):
-        for connection in list(self.active_connections.keys()):
-            try:
-                await connection.send_json(message)
-            except:
-                pass
-
-manager = ConnectionManager()
-
-# ============================================
-# OSM BUILDING LOOKUP
-# ============================================
-def get_building_at_location(lat: float, lng: float):
-    try:
-        overpass_url = "https://overpass-api.de/api/interpreter"
-        query = f"""
-        [out:json];
-        (
-          way["building"](around:10,{lat},{lng});
-          relation["building"](around:10,{lat},{lng});
-        );
-        out body;
-        >;
-        out skel qt;
-        """
-        params = urllib.parse.urlencode({'data': query}).encode()
-        req = urllib.request.Request(overpass_url, data=params, headers={'User-Agent': 'UNDP-ImpactMapper/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode())
-            for element in data.get("elements", []):
-                if element.get("type") in ["way", "relation"]:
-                    tags = element.get("tags", {})
-                    return {
-                        "osm_id": f"{element['type']}/{element['id']}",
-                        "name": tags.get("name", ""),
-                        "building_type": tags.get("building", "yes"),
-                        "address": f"{tags.get('addr:street', '')} {tags.get('addr:housenumber', '')}".strip()
-                    }
-    except Exception as e:
-        print(f"OSM lookup error: {e}")
-    return None
-
-# ============================================
-# DATABASE FUNCTIONS
-# ============================================
-async def save_report(report_uuid: str, building_id: str, building_osm_id: str, building_name: str, building_address: str,
-                damage_level: str, lat: float, lng: float, location_text: str, photo_path: str,
-                infrastructure_type: str, crisis_nature: str, debris: str, notes: str, username: str, synced: int = 1, sms_number: str = ""):
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO reports (report_uuid, building_id, building_osm_id, building_name, building_address,
-                                damage_level, version, lat, lng, location_text, photo_path,
-                                infrastructure_type, crisis_nature, debris, notes, username, timestamp, is_current, synced, sms_number)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-        """, report_uuid, building_id, building_osm_id, building_name, building_address,
-           damage_level, 1, lat, lng, location_text, photo_path,
-           infrastructure_type, crisis_nature, debris, notes, username, datetime.now().isoformat(), 1, synced, sms_number)
-
-async def get_reports_db(limit: int = 200):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT report_uuid, damage_level, lat, lng, location_text, infrastructure_type,
-                   building_name, building_address, crisis_nature, debris,
-                   notes, timestamp, username, photo_path
-            FROM reports WHERE is_current = 1 ORDER BY timestamp DESC LIMIT $1
-        """, limit)
-        return [{
-            "report_uuid": r[0], "damage_level": r[1], "lat": r[2], "lng": r[3],
-            "location_text": r[4] or "", "infrastructure_type": r[5],
-            "building_name": r[6] or "", "building_address": r[7] or "",
-            "crisis_nature": r[8], "debris": r[9],
-            "notes": r[10] or "", "timestamp": r[11], "username": r[12],
-            "photo_url": f"/photos/{os.path.basename(r[13])}" if r[13] else None
-        } for r in rows]
-
-async def get_leaderboard_db(limit: int = 15):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT username, points, verified_reports, badge_level, avatar, color FROM users ORDER BY points DESC LIMIT $1", limit)
-        return [{"username": r[0], "points": r[1], "verified_reports": r[2], "badge": r[3], "avatar": r[4], "color": r[5]} for r in rows]
-
-async def update_user_points(username: str, points_increment: int = 10):
-    async with db_pool.acquire() as conn:
-        await conn.execute("UPDATE users SET points = points + $1, verified_reports = verified_reports + 1 WHERE username = $2", points_increment, username)
-
-# ============================================
-# AUTHENTICATION
-# ============================================
-async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT password_hash, role, avatar, color, points, badge_level FROM users WHERE username = $1", credentials.username)
-        if not row:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
-        if password_hash != row[0]:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        return {"username": credentials.username, "role": row[1], "avatar": row[2], "color": row[3], "points": row[4], "badge": row[5]}
-
-def require_admin(current_user: dict = Depends(verify_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
-
-def require_reporter(current_user: dict = Depends(verify_user)):
-    if current_user["role"] not in ["admin", "reporter"]:
-        raise HTTPException(status_code=403, detail="Reporter access required")
-    return current_user
-
-# ============================================
-# LANGUAGES DICTIONARY
-# ============================================
-LANGUAGES = {
-    "en": {"name": "English", "flag": "🇬🇧", "subtitle": "Unified Command Center | Analytics", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
-    "es": {"name": "Español", "flag": "🇪🇸", "subtitle": "Centro de Mando Unificado | Analíticas", "report_damage": "Reportar Daños", "damage_level": "Nivel de Daño", "minimal": "Daño Mínimo", "partial": "Daño Parcial", "complete": "Destruido", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Gobierno", "utility": "Utilidad", "transport": "Transporte", "community": "Comunitario", "public": "Público", "crisis": "Crisis", "earthquake": "Terremoto", "flood": "Inundación", "tsunami": "Tsunami", "hurricane": "Huracán", "wildfire": "Incendio", "explosion": "Explosión", "conflict": "Conflicto", "debris": "¿Escombros?", "yes": "Sí", "no": "No", "submit": "Enviar", "gps_location": "Usar GPS", "building_name": "Nombre", "photo": "Foto", "notes": "Notas", "recent_reports": "Reportes", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntarios", "rescue_teams": "Rescate", "online_users": "En línea", "leaderboard": "Clasificación", "chat": "Chat", "type_message": "Escribe...", "send": "Enviar", "click_building": "🏢 ¡Haga clic en cualquier edificio!", "total_reports": "Total", "today_reports": "Hoy", "pending_sync": "Pendiente", "logout": "Salir", "sync_now": "Sincronizar", "sms_report": "Reporte SMS", "sms_placeholder": "Formato: DAÑO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Mando", "analytics": "Analíticas"},
-    "fr": {"name": "Français", "flag": "🇫🇷", "subtitle": "Centre de Commandement Unifié | Analytique", "report_damage": "Signaler", "damage_level": "Niveau", "minimal": "Minime", "partial": "Partiel", "complete": "Complet", "infrastructure": "Type", "residential": "Résidentiel", "commercial": "Commercial", "government": "Gouvernement", "utility": "Utilitaire", "transport": "Transport", "community": "Communautaire", "public": "Public", "crisis": "Crise", "earthquake": "Tremblement", "flood": "Inondation", "tsunami": "Tsunami", "hurricane": "Ouragan", "wildfire": "Incendie", "explosion": "Explosion", "conflict": "Conflit", "debris": "Débris?", "yes": "Oui", "no": "Non", "submit": "Soumettre", "gps_location": "Mon GPS", "building_name": "Nom", "photo": "Photo", "notes": "Notes", "recent_reports": "Rapports", "export_data": "Exporter", "export_csv": "Exporter CSV", "export_geojson": "Exporter GeoJSON", "active_volunteers": "Bénévoles", "rescue_teams": "Secours", "online_users": "En ligne", "leaderboard": "Classement", "chat": "Chat", "type_message": "Message...", "send": "Envoyer", "click_building": "🏢 Cliquez sur un bâtiment!", "total_reports": "Total", "today_reports": "Aujourd'hui", "pending_sync": "En attente", "logout": "Déconnexion", "sync_now": "Synchroniser", "sms_report": "Rapport SMS", "sms_placeholder": "Format: DÉGÂT LAT LNG", "sms_send": "Envoyer SMS", "command_center": "Centre de Commandement", "analytics": "Analytique"},
-    "pt": {"name": "Português", "flag": "🇵🇹", "subtitle": "Centro de Comando Unificado | Análises", "report_damage": "Relatar", "damage_level": "Nível", "minimal": "Mínimo", "partial": "Parcial", "complete": "Completo", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Governo", "utility": "Utilidade", "transport": "Transporte", "community": "Comunitário", "public": "Público", "crisis": "Crise", "earthquake": "Terremoto", "flood": "Inundação", "tsunami": "Tsunami", "hurricane": "Furacão", "wildfire": "Incêndio", "explosion": "Explosão", "conflict": "Conflito", "debris": "Detritos?", "yes": "Sim", "no": "Não", "submit": "Enviar", "gps_location": "Meu GPS", "building_name": "Nome", "photo": "Foto", "notes": "Notas", "recent_reports": "Relatórios", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntários", "rescue_teams": "Resgate", "online_users": "Online", "leaderboard": "Ranking", "chat": "Chat", "type_message": "Digite...", "send": "Enviar", "click_building": "🏢 Clique em qualquer edifício!", "total_reports": "Total", "today_reports": "Hoje", "pending_sync": "Pendente", "logout": "Sair", "sync_now": "Sincronizar", "sms_report": "Relatório SMS", "sms_placeholder": "Formato: DANO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Comando", "analytics": "Análises"},
-    "ar": {"name": "العربية", "flag": "🇸🇦", "subtitle": "مركز قيادة موحد | تحليلات", "report_damage": "الإبلاغ", "damage_level": "المستوى", "minimal": "بسيط", "partial": "جزئي", "complete": "كامل", "infrastructure": "النوع", "residential": "سكني", "commercial": "تجاري", "government": "حكومي", "utility": "مرافق", "transport": "مواصلات", "community": "مجتمعي", "public": "عام", "crisis": "الأزمة", "earthquake": "زلزال", "flood": "فيضان", "tsunami": "تسونامي", "hurricane": "إعصار", "wildfire": "حرائق", "explosion": "انفجار", "conflict": "صراع", "debris": "حطام؟", "yes": "نعم", "no": "لا", "submit": "إرسال", "gps_location": "موقعي", "building_name": "الاسم", "photo": "صورة", "notes": "ملاحظات", "recent_reports": "التقارير", "export_data": "تصدير", "export_csv": "CSV", "export_geojson": "GeoJSON", "active_volunteers": "متطوعين", "rescue_teams": "إنقاذ", "online_users": "متصل", "leaderboard": "المتصدرين", "chat": "محادثة", "type_message": "اكتب...", "send": "إرسال", "click_building": "🏢 انقر على أي مبنى!", "total_reports": "الإجمالي", "today_reports": "اليوم", "pending_sync": "معلق", "logout": "خروج", "sync_now": "مزامنة", "sms_report": "تقرير SMS", "sms_placeholder": "التنسيق: ضرر خط طول", "sms_send": "إرسال SMS", "command_center": "مركز القيادة", "analytics": "تحليلات"},
-    "zh": {"name": "中文", "flag": "🇨🇳", "subtitle": "统一指挥中心 | 分析", "report_damage": "报告损坏", "damage_level": "损坏程度", "minimal": "轻微", "partial": "部分", "complete": "完全", "infrastructure": "类型", "residential": "住宅", "commercial": "商业", "government": "政府", "utility": "公用", "transport": "交通", "community": "社区", "public": "公共", "crisis": "危机类型", "earthquake": "地震", "flood": "洪水", "tsunami": "海啸", "hurricane": "飓风", "wildfire": "野火", "explosion": "爆炸", "conflict": "冲突", "debris": "碎片？", "yes": "是", "no": "否", "submit": "提交", "gps_location": "我的位置", "building_name": "建筑名称", "photo": "照片", "notes": "备注", "recent_reports": "最近报告", "export_data": "导出数据", "export_csv": "导出CSV", "export_geojson": "导出GeoJSON", "active_volunteers": "志愿者", "rescue_teams": "救援队", "online_users": "在线", "leaderboard": "排行榜", "chat": "聊天", "type_message": "输入消息...", "send": "发送", "click_building": "🏢 点击地图上的建筑物！", "total_reports": "报告总数", "today_reports": "今日", "pending_sync": "待同步", "logout": "退出", "sync_now": "立即同步", "sms_report": "短信报告", "sms_placeholder": "格式: 损坏 纬度 经度", "sms_send": "发送短信", "command_center": "指挥中心", "analytics": "分析"}
-}
-
-# ============================================
-# API ENDPOINTS
-# ============================================
-@app.get("/")
-async def login_page():
-    return HTMLResponse(LOGIN_HTML)
-
-@app.get("/dashboard")
-async def unified_dashboard(current_user: dict = Depends(verify_user)):
-    return HTMLResponse(UNIFIED_DASHBOARD_HTML)
-
-@app.get("/api/lang/{lang}")
-async def get_language(lang: str):
-    return LANGUAGES.get(lang, LANGUAGES["en"])
-
-@app.get("/api/current_user")
-async def get_current_user(current_user: dict = Depends(verify_user)):
-    return current_user
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    return await get_leaderboard_db(15)
-
-@app.get("/api/building/{lat}/{lng}")
-async def get_building_info(lat: float, lng: float):
-    building = get_building_at_location(lat, lng)
-    return building if building else None
-
-@app.post("/api/report")
-async def create_report(
-    damage_level: str = Form(...),
-    infrastructure_type: str = Form(...),
-    building_name: str = Form(""),
-    building_address: str = Form(""),
-    building_osm_id: str = Form(""),
-    crisis_nature: str = Form(...),
-    debris: str = Form(...),
-    text_location: str = Form(""),
-    lat: Optional[float] = Form(None),
-    lng: Optional[float] = Form(None),
-    notes: str = Form(""),
-    sms_number: str = Form(""),
-    photo: UploadFile = File(None),
-    current_user: dict = Depends(require_reporter)
-):
-    photo_path = None
-    if photo and photo.filename:
-        ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
-        photo_filename = f"{datetime.now().timestamp()}_{current_user['username']}_{uuid.uuid4().hex[:6]}.{ext}"
-        photo_path = os.path.join(PHOTOS_DIR, photo_filename)
-        content = await photo.read()
-        with open(photo_path, "wb") as f:
-            f.write(content)
-    
-    if lat and lng:
-        building_id = f"bld_{lat}_{lng}"
-    else:
-        building_id = f"bld_txt_{hashlib.md5(text_location.encode()).hexdigest()[:10]}"
-    
-    report_uuid = str(uuid.uuid4())[:8]
-    
-    await save_report(
-        report_uuid, building_id, building_osm_id, building_name, building_address,
-        damage_level, lat or 0, lng or 0, text_location, photo_path,
-        infrastructure_type, crisis_nature, debris, notes, current_user['username'], 1, sms_number
-    )
-    
-    await update_user_points(current_user['username'], 10)
-    
-    await manager.broadcast_report({
-        "report_uuid": report_uuid, "damage_level": damage_level, "lat": lat, "lng": lng,
-        "infrastructure_type": infrastructure_type, "building_name": building_name,
-        "timestamp": datetime.now().isoformat(), "username": current_user["username"]
-    })
-    
-    return {"status": "success", "report_uuid": report_uuid, "lat": lat, "lng": lng}
-
-@app.post("/api/sms_report")
-async def sms_report(
-    sms_text: str = Form(...),
-    sms_number: str = Form("")
-):
-    parts = sms_text.upper().split()
-    if len(parts) >= 3:
-        damage_level = parts[0].lower()
-        try:
-            lat = float(parts[1])
-            lng = float(parts[2])
-            notes = " ".join(parts[3:]) if len(parts) > 3 else "SMS Report"
-            report_uuid = str(uuid.uuid4())[:8]
-            building_id = f"sms_{lat}_{lng}"
-            await save_report(
-                report_uuid, building_id, "", "", "",
-                damage_level, lat, lng, "", None,
-                "unknown", "earthquake", "no", notes, "sms_user", 1, sms_number
-            )
-            await manager.broadcast_report({
-                "report_uuid": report_uuid, "damage_level": damage_level, "lat": lat, "lng": lng,
-                "infrastructure_type": "SMS Report", "building_name": "SMS Report",
-                "timestamp": datetime.now().isoformat(), "username": "SMS User"
-            })
-            return {"status": "success", "message": "SMS report received", "lat": lat, "lng": lng}
-        except ValueError:
-            return {"status": "error", "message": "Invalid coordinates"}
-    return {"status": "error", "message": "Invalid SMS format. Use: DAMAGE_TYPE LAT LNG"}
-
-@app.post("/api/sync")
-async def sync_offline_reports(reports_data: List[Dict], current_user: dict = Depends(require_reporter)):
-    synced_count = 0
-    for report in reports_data:
-        try:
-            async with db_pool.acquire() as conn:
-                existing = await conn.fetchval("SELECT report_uuid FROM reports WHERE report_uuid = $1", report.get('report_uuid'))
-                if not existing:
-                    await conn.execute("""
-                        INSERT INTO reports (report_uuid, building_id, damage_level, lat, lng, location_text,
-                                            infrastructure_type, building_name, crisis_nature, debris,
-                                            notes, username, timestamp, synced, is_current)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-                    """, report.get('report_uuid'), report.get('building_id'), report.get('damage_level'),
-                        report.get('lat'), report.get('lng'), report.get('location_text'),
-                        report.get('infrastructure_type'), report.get('building_name'), report.get('crisis_nature'),
-                        report.get('debris'), report.get('notes'), current_user['username'],
-                        report.get('timestamp'), 1, 1)
-                    synced_count += 1
-                    await update_user_points(current_user['username'], 10)
-        except Exception as e:
-            print(f"Sync error: {e}")
-    return {"synced": synced_count}
-
-@app.post("/api/update_location")
-async def update_user_location(lat: float, lng: float, current_user: dict = Depends(verify_user)):
-    await manager.update_user_location(current_user["username"], lat, lng)
-    return {"status": "success"}
-
-@app.get("/api/reports")
-async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
-    return await get_reports_db(limit)
-
-# Allow reporters (not just admins) to export
-@app.get("/api/reports/geojson")
-async def get_geojson(current_user: dict = Depends(require_reporter)):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT damage_level, lat, lng, infrastructure_type, crisis_nature, building_name, timestamp FROM reports WHERE lat != 0 AND is_current = 1")
-    features = []
-    for r in rows:
-        if r[1] and r[2]:
-            features.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [float(r[2]), float(r[1])]},
-                "properties": {
-                    "damage_level": r[0], "infrastructure_type": r[3],
-                    "crisis_nature": r[4], "building_name": r[5], "timestamp": r[6]
-                }
-            })
-    return {"type": "FeatureCollection", "features": features}
-
-# Allow reporters (not just admins) to export
-@app.get("/api/reports/csv")
-async def export_csv(current_user: dict = Depends(require_reporter)):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT damage_level, lat, lng, building_name, building_address, infrastructure_type, crisis_nature, debris, notes, timestamp, username FROM reports WHERE is_current = 1 ORDER BY timestamp DESC")
-    csv = "Damage Level,Latitude,Longitude,Building Name,Building Address,Infrastructure Type,Crisis Nature,Debris,Notes,Timestamp,Username\n"
-    for r in rows:
-        lat_val = f"{r[1]:.6f}" if r[1] else ""
-        lng_val = f"{r[2]:.6f}" if r[2] else ""
-        csv += f"{r[0]},{lat_val},{lng_val},\"{r[3] or ''}\",\"{r[4] or ''}\",{r[5]},{r[6]},{r[7]},\"{r[8] or ''}\",{r[9]},{r[10]}\n"
-    return HTMLResponse(csv, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=impact_reports.csv"})
-
-@app.get("/api/stats")
-async def get_stats():
-    async with db_pool.acquire() as conn:
-        total = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE is_current = 1")
-        today = datetime.now().date().isoformat()
-        today_count = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE DATE(timestamp) = $1 AND is_current = 1", today)
-        pending = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE synced = 0")
-    return {"total_reports": total, "today_reports": today_count, "pending_sync": pending, "active_volunteers": 350, "rescue_teams": 12, "responders": 48}
-
-@app.get("/photos/{filename}")
-async def serve_photo(filename: str):
-    file_path = os.path.join(PHOTOS_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    old_path = f"photos/{filename}"
-    if os.path.exists(old_path):
-        return FileResponse(old_path)
-    raise HTTPException(status_code=404, detail="Photo not found")
-
-@app.websocket("/ws/{username}")
-async def websocket_endpoint(websocket: WebSocket, username: str):
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT role, avatar, color, points, badge_level FROM users WHERE username = $1", username)
-        if not user:
-            await websocket.close(code=1008)
-            return
-    user_info = {"username": username, "role": user[0], "avatar": user[1], "color": user[2], "points": user[3], "badge": user[4]}
-    await manager.connect(websocket, user_info)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            if data.get("type") == "chat":
-                await manager.broadcast_chat(data.get("message", ""), websocket)
-            elif data.get("type") == "location":
-                await manager.update_user_location(username, data.get("lat"), data.get("lng"))
-            elif data.get("type") == "ping":
-                await websocket.send_json({"type": "pong"})
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        manager.disconnect(websocket)
-
-# ============================================
-# LOGIN HTML
-# ============================================
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNDP ImpactMapper - Unified Crisis Platform</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #0a2a1a 0%, #0a1a0f 100%);
-            position: relative;
-            overflow-x: hidden;
-        }
-        .hero-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-image: url('https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1600');
-            background-size: cover;
-            background-position: center 30%;
-            opacity: 0.12;
-            z-index: 0;
-        }
-        .container {
-            position: relative;
-            z-index: 1;
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 60px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            margin-bottom: 80px;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .logo h1 { font-size: 28px; font-weight: 700; color: white; }
-        .logo span { color: #2ecc71; }
-        .logo p { font-size: 12px; color: #aaa; margin-top: 4px; }
-        .nav-links { display: flex; gap: 30px; align-items: center; flex-wrap: wrap; }
-        .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.3s ease; }
-        .nav-links a:hover { color: #2ecc71; transform: scale(1.05); }
-        .language-select {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(46,204,113,0.3);
-            padding: 8px 16px;
-            border-radius: 30px;
-            color: white;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.3s ease;
-        }
-        .language-select:hover { border-color: #2ecc71; background: rgba(46,204,113,0.2); }
-        .hero-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 60px;
-            flex-wrap: wrap;
-            margin-bottom: 80px;
-        }
-        .hero-left { flex: 1; min-width: 300px; }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(46,204,113,0.2);
-            border: 1px solid rgba(46,204,113,0.4);
-            padding: 6px 16px;
-            border-radius: 30px;
-            font-size: 12px;
-            color: #2ecc71;
-            margin-bottom: 24px;
-        }
-        .hero-left h1 {
-            font-size: 56px;
-            font-weight: 800;
-            line-height: 1.2;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #fff, #2ecc71);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .hero-left p { font-size: 18px; color: #ccc; line-height: 1.6; margin-bottom: 32px; max-width: 600px; }
-        .stats { display: flex; gap: 40px; margin-top: 40px; flex-wrap: wrap; }
-        .stat-item { text-align: left; transition: all 0.3s ease; cursor: pointer; }
-        .stat-item:hover { transform: translateY(-5px); }
-        .stat-item:hover .stat-number { text-shadow: 0 0 15px rgba(46,204,113,0.8); }
-        .stat-number { font-size: 32px; font-weight: 800; color: #2ecc71; transition: all 0.3s ease; }
-        .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
-        .hero-right { flex: 0.8; min-width: 350px; }
-        .login-card {
-            background: rgba(17, 17, 17, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 16px;
-            padding: 40px;
-            border: 1px solid rgba(46,204,113,0.3);
-            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-        }
-        .login-card:hover { border-color: rgba(46,204,113,0.6); transform: translateY(-5px); }
-        .login-card h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-        .login-card p { font-size: 13px; color: #888; margin-bottom: 24px; }
-        .input-group { margin-bottom: 16px; }
-        .input-group input {
-            width: 100%;
-            padding: 14px 16px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 12px;
-            color: white;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        .input-group input:focus {
-            outline: none;
-            border-color: #2ecc71;
-            box-shadow: 0 0 0 3px rgba(46,204,113,0.2);
-            transform: scale(1.01);
-        }
-        .login-btn {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #2ecc71, #27ae60);
-            color: white;
-            font-weight: 700;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 8px;
-            transition: all 0.3s ease;
-        }
-        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(46,204,113,0.5); }
-        .demo-info { margin-top: 24px; padding-top: 20px; border-top: 1px solid #2a2a2a; text-align: center; }
-        .demo-info p { font-size: 11px; color: #666; margin-bottom: 8px; }
-        .demo-badge { display: inline-flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-        .demo-role {
-            background: rgba(46,204,113,0.1);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: #2ecc71;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .demo-role:hover { background: rgba(46,204,113,0.3); transform: scale(1.05); }
-        .footer { margin-top: auto; padding: 30px 0 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
-        .footer p { font-size: 12px; color: #666; }
-        .partner-logos { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
-        .partner { font-size: 14px; opacity: 0.6; transition: all 0.3s ease; cursor: pointer; }
-        .partner:hover { opacity: 1; transform: scale(1.1); }
-        @media (max-width: 968px) {
-            .container { padding: 20px 30px; }
-            .hero-section { flex-direction: column; }
-            .hero-left h1 { font-size: 40px; }
-            .navbar { flex-direction: column; text-align: center; }
-        }
-        @media (max-width: 600px) {
-            .container { padding: 15px 20px; }
-            .hero-left h1 { font-size: 32px; }
-            .login-card { padding: 25px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="hero-bg"></div>
-    <div class="container">
-        <div class="navbar">
-            <div class="logo">
-                <h1>🌍 UNDP <span>ImpactMapper</span></h1>
-                <p>Unified Crisis Intelligence Platform</p>
-            </div>
-            <div class="nav-links">
-                <a href="#">Explore</a>
-                <a href="#">Learn</a>
-                <a href="#">About</a>
-                <a href="#">Support</a>
-                <select id="languageSelect" class="language-select">
-                    <option value="en">🌍 English</option>
-                    <option value="es">🇪🇸 Español</option>
-                    <option value="fr">🇫🇷 Français</option>
-                    <option value="pt">🇵🇹 Português</option>
-                    <option value="ar">🇸🇦 العربية</option>
-                    <option value="zh">🇨🇳 中文</option>
-                </select>
-            </div>
-        </div>
-        <div class="hero-section">
-            <div class="hero-left">
-                <div class="hero-badge">🌍 United Nations Development Programme</div>
-                <h1>EMPOWERING<br>CRISIS RESPONSE</h1>
-                <p>By leveraging artificial intelligence to create maps, coordinate rescue efforts, and provide vital information for sustainable development in communities facing disaster.</p>
-                <div class="stats">
-                    <div class="stat-item"><div class="stat-number">350+</div><div class="stat-label">Active Volunteers</div></div>
-                    <div class="stat-item"><div class="stat-number">12+</div><div class="stat-label">Rescue Teams</div></div>
-                    <div class="stat-item"><div class="stat-number">1,250+</div><div class="stat-label">Reports Submitted</div></div>
-                </div>
-            </div>
-            <div class="hero-right">
-                <div class="login-card">
-                    <h2>Access Unified Dashboard</h2>
-                    <p>Login to access Command Center & Analytics</p>
-                    <div class="input-group"><input type="text" id="username" placeholder="Username"></div>
-                    <div class="input-group"><input type="password" id="password" placeholder="Password"></div>
-                    <button class="login-btn" onclick="login()">🔐 Login to ImpactMapper</button>
-                    <div id="errorMsg" style="color:#e74c3c; font-size:12px; margin-top:12px; text-align:center;"></div>
-                    <div class="demo-info">
-                        <p>Demo Accounts:</p>
-                        <div class="demo-badge">
-                            <span class="demo-role">👑 admin / admin123 (Full Access + Analytics)</span>
-                            <span class="demo-role">📸 reporter / report123 (Submit reports)</span>
-                            <span class="demo-role">👁️ viewer / view123 (View only)</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="footer">
-            <div class="partner-logos">
-                <span class="partner">🔴 American Red Cross</span>
-                <span class="partner">🇺🇳 UN OCHA</span>
-                <span class="partner">🌾 World Food Programme</span>
-                <span class="partner">🏥 World Health Organization</span>
-                <span class="partner">🚒 FEMA</span>
-                <span class="partner">🗺️ OpenStreetMap</span>
-            </div>
-            <p>© <span id="currentYear"></span> UNDP ImpactMapper - Unified Crisis Intelligence Platform</p>
-        </div>
-    </div>
-    <script>
-        document.getElementById('currentYear').innerText = new Date().getFullYear();
-        const langSelect = document.getElementById('languageSelect');
-        async function setLanguage(lang) { try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {} }
-        langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('errorMsg');
-            if (!username || !password) { errorDiv.innerText = 'Please enter username and password'; return; }
-            try {
-                const response = await fetch('/dashboard', { headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) } });
-                if (response.ok) { window.location.href = '/dashboard'; } 
-                else { errorDiv.innerText = 'Invalid credentials'; }
-            } catch(e) { errorDiv.innerText = 'Login failed'; }
-        }
-        document.getElementById('password').addEventListener('keypress', function(e) { if (e.key === 'Enter') login(); });
-        setLanguage('en');
-    </script>
-</body>
-</html>
-"""
-
-# ============================================
-# UNIFIED DASHBOARD HTML (SIMPLIFIED CHAT, NO EXTRA CONNECTION)
-# ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1017,6 +237,7 @@ UNIFIED_DASHBOARD_HTML = """
             align-items: center;
             justify-content: flex-end;
             gap: 12px;
+            flex-wrap: wrap;
         }
         .lang-dropdown {
             background: rgba(255,255,255,0.15);
@@ -1048,8 +269,11 @@ UNIFIED_DASHBOARD_HTML = """
             font-size: 0.65rem;
             cursor: pointer;
             transition: all 0.3s ease;
+            white-space: nowrap;
         }
+        .sync-btn:hover { background: rgba(255,255,255,0.25); }
         .logout-btn { background: rgba(231,76,60,0.3); }
+        .logout-btn:hover { background: rgba(231,76,60,0.5); }
         .role-badge {
             background: rgba(0,0,0,0.3);
             color: #2ecc71;
@@ -1206,6 +430,13 @@ UNIFIED_DASHBOARD_HTML = """
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
             .leaderboard-panel { right: 230px; }
+            .controls-right { gap: 6px; }
+            .sync-btn, .logout-btn { padding: 3px 6px; font-size: 0.6rem; }
+        }
+        @media (max-width: 600px) {
+            .system-bar { flex-wrap: wrap; gap: 5px; }
+            .brand-center { order: 1; width: 100%; }
+            .controls-right { order: 2; justify-content: center; }
         }
     </style>
 </head>
@@ -1221,6 +452,11 @@ UNIFIED_DASHBOARD_HTML = """
         <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
+        <!-- EXPORT BUTTONS IN HEADER (before logout) -->
+        <span id="headerExportGroup" style="display:none; gap:5px; align-items:center;">
+            <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
+            <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
+        </span>
         <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 </div>
@@ -1259,9 +495,7 @@ UNIFIED_DASHBOARD_HTML = """
             <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
-            <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data</span></h3>
-            <div style="display:flex; gap:8px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">Export CSV</span></button>
-            <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">Export GeoJSON</span></button></div></div>
+            <!-- Export card removed from sidebar -->
         </div>
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
@@ -1296,7 +530,7 @@ UNIFIED_DASHBOARD_HTML = """
 
 <div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
 
-<!-- GLOWING + DRAGGABLE CHAT PANEL (uses existing ws) -->
+<!-- GLOWING + DRAGGABLE CHAT PANEL -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -1422,9 +656,6 @@ function updateUITexts() {
     document.getElementById('smsTitle').innerText = translations.sms_report || 'SMS Report';
     document.getElementById('smsSendLabel').innerText = translations.sms_send || 'Send SMS Report';
     document.getElementById('recentTitle').innerText = translations.recent_reports || 'Recent Reports';
-    document.getElementById('exportTitle').innerText = translations.export_data || 'Export Data';
-    document.getElementById('csvLabel').innerText = translations.export_csv || 'Export CSV';
-    document.getElementById('geojsonLabel').innerText = translations.export_geojson || 'Export GeoJSON';
     document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
     document.getElementById('chatInput').placeholder = translations.type_message || 'Type a message...';
 }
@@ -1617,11 +848,15 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        if(user.role === 'admin' || user.role === 'reporter') {
-            document.getElementById('exportCard').style.display = 'block';
+        
+        // Show export buttons in header only for admin and reporter
+        const exportGroup = document.getElementById('headerExportGroup');
+        if (user.role === 'admin' || user.role === 'reporter') {
+            exportGroup.style.display = 'inline-flex';
         } else {
-            document.getElementById('exportCard').style.display = 'none';
+            exportGroup.style.display = 'none';
         }
+        
         if(user.role === 'admin') {
             document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
             isAdmin = true;
@@ -1662,7 +897,7 @@ function updatePresence(users, count) {
 
 function updateLiveContributors(contributors) { /* optional */ }
 
-// ----- SIMPLE CHAT SEND (uses main ws, no extra connection) -----
+// ----- SIMPLE CHAT SEND (uses main ws) -----
 function sendChatMessage() {
     let input = document.getElementById('chatInput');
     let msg = input.value.trim();
@@ -1678,7 +913,6 @@ function sendChatMessage() {
 function addChatMessage(msg) {
     let container = document.getElementById('chatMessages');
     if(!container) return;
-    // Remove system message if it's the only one
     if (container.children.length === 1 && container.children[0].innerText.includes('Chat ready')) {
         container.innerHTML = '';
     }
@@ -1807,16 +1041,3 @@ setInterval(() => loadLeaderboard(), 10000);
 </body>
 </html>
 """
-
-# ============================================
-# VERCEL SERVERLESS HANDLER
-# ============================================
-from mangum import Mangum
-handler = Mangum(app)
-
-# ============================================
-# LOCAL DEVELOPMENT
-# ============================================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
