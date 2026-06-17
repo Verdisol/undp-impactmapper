@@ -495,7 +495,6 @@ UNIFIED_DASHBOARD_HTML = """
             <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
-            <!-- Export card removed from sidebar -->
         </div>
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
@@ -537,6 +536,7 @@ UNIFIED_DASHBOARD_HTML = """
         <div class="status-badge">● Live</div>
     </div>
     <div id="chatMessages" class="chat-messages">
+        <!-- Only one initial message, no error/waiting messages -->
         <div class="chat-message other">
             <span class="msg-username">🚀 System</span>
             Chat ready.
@@ -913,6 +913,7 @@ function sendChatMessage() {
 function addChatMessage(msg) {
     let container = document.getElementById('chatMessages');
     if(!container) return;
+    // Remove the initial "Chat ready." message when first real message arrives
     if (container.children.length === 1 && container.children[0].innerText.includes('Chat ready')) {
         container.innerHTML = '';
     }
