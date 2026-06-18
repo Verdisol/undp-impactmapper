@@ -425,42 +425,275 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML
+# LOGIN HTML – FULL VERSION (background, stats, partners, etc.)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
-<html>
-<head><title>UNDP ImpactMapper - Login</title></head>
-<body style="font-family:Inter,sans-serif;background:#0a2a1a;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
-<div style="background:rgba(17,17,17,0.95);padding:40px;border-radius:16px;border:1px solid #2ecc71;width:400px;">
-<h2 style="color:white;text-align:center;">🌍 UNDP ImpactMapper</h2>
-<p style="color:#888;text-align:center;">Login to Command Center</p>
-<input type="text" id="username" placeholder="Username" style="width:100%;padding:14px;margin:10px 0;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:12px;color:white;">
-<input type="password" id="password" placeholder="Password" style="width:100%;padding:14px;margin:10px 0;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:12px;color:white;">
-<button onclick="login()" style="width:100%;padding:14px;background:#2ecc71;color:white;font-weight:700;border:none;border-radius:12px;cursor:pointer;">🔐 Login</button>
-<div id="error" style="color:#e74c3c;margin-top:12px;text-align:center;"></div>
-<div style="margin-top:20px;padding-top:20px;border-top:1px solid #2a2a2a;text-align:center;font-size:11px;color:#666;">
-Demo accounts: admin/admin123, reporter/report123, viewer/view123
-</div>
-</div>
-<script>
-async function login(){
-    const u=document.getElementById('username').value, p=document.getElementById('password').value;
-    if(!u||!p){document.getElementById('error').innerText='Please enter username and password';return;}
-    try{
-        const res=await fetch('/dashboard',{headers:{'Authorization':'Basic '+btoa(u+':'+p)}});
-        if(res.ok) window.location.href='/dashboard';
-        else document.getElementById('error').innerText='Invalid credentials';
-    }catch(e){document.getElementById('error').innerText='Login failed';}
-}
-document.getElementById('password').addEventListener('keypress',e=>{if(e.key==='Enter')login();});
-</script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNDP ImpactMapper - Unified Crisis Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a2a1a 0%, #0a1a0f 100%);
+            position: relative;
+            overflow-x: hidden;
+        }
+        .hero-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1600');
+            background-size: cover;
+            background-position: center 30%;
+            opacity: 0.12;
+            z-index: 0;
+        }
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 60px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            margin-bottom: 80px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .logo h1 { font-size: 28px; font-weight: 700; color: white; }
+        .logo span { color: #2ecc71; }
+        .logo p { font-size: 12px; color: #aaa; margin-top: 4px; }
+        .nav-links { display: flex; gap: 30px; align-items: center; flex-wrap: wrap; }
+        .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.3s ease; }
+        .nav-links a:hover { color: #2ecc71; transform: scale(1.05); }
+        .language-select {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(46,204,113,0.3);
+            padding: 8px 16px;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .language-select:hover { border-color: #2ecc71; background: rgba(46,204,113,0.2); }
+        .hero-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 60px;
+            flex-wrap: wrap;
+            margin-bottom: 80px;
+        }
+        .hero-left { flex: 1; min-width: 300px; }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(46,204,113,0.2);
+            border: 1px solid rgba(46,204,113,0.4);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 12px;
+            color: #2ecc71;
+            margin-bottom: 24px;
+        }
+        .hero-left h1 {
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #fff, #2ecc71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-left p { font-size: 18px; color: #ccc; line-height: 1.6; margin-bottom: 32px; max-width: 600px; }
+        .stats { display: flex; gap: 40px; margin-top: 40px; flex-wrap: wrap; }
+        .stat-item { text-align: left; transition: all 0.3s ease; cursor: pointer; }
+        .stat-item:hover { transform: translateY(-5px); }
+        .stat-item:hover .stat-number { text-shadow: 0 0 15px rgba(46,204,113,0.8); }
+        .stat-number { font-size: 32px; font-weight: 800; color: #2ecc71; transition: all 0.3s ease; }
+        .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+        .hero-right { flex: 0.8; min-width: 350px; }
+        .login-card {
+            background: rgba(17, 17, 17, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 16px;
+            padding: 40px;
+            border: 1px solid rgba(46,204,113,0.3);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        .login-card:hover { border-color: rgba(46,204,113,0.6); transform: translateY(-5px); }
+        .login-card h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+        .login-card p { font-size: 13px; color: #888; margin-bottom: 24px; }
+        .input-group { margin-bottom: 16px; }
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #2ecc71;
+            box-shadow: 0 0 0 3px rgba(46,204,113,0.2);
+            transform: scale(1.01);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.3s ease;
+        }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(46,204,113,0.5); }
+        .demo-info { margin-top: 24px; padding-top: 20px; border-top: 1px solid #2a2a2a; text-align: center; }
+        .demo-info p { font-size: 11px; color: #666; margin-bottom: 8px; }
+        .demo-badge { display: inline-flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .demo-role {
+            background: rgba(46,204,113,0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: #2ecc71;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .demo-role:hover { background: rgba(46,204,113,0.3); transform: scale(1.05); }
+        .footer { margin-top: auto; padding: 30px 0 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+        .footer p { font-size: 12px; color: #666; }
+        .partner-logos { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
+        .partner { font-size: 14px; opacity: 0.6; transition: all 0.3s ease; cursor: pointer; }
+        .partner:hover { opacity: 1; transform: scale(1.1); }
+        @media (max-width: 968px) {
+            .container { padding: 20px 30px; }
+            .hero-section { flex-direction: column; }
+            .hero-left h1 { font-size: 40px; }
+            .navbar { flex-direction: column; text-align: center; }
+        }
+        @media (max-width: 600px) {
+            .container { padding: 15px 20px; }
+            .hero-left h1 { font-size: 32px; }
+            .login-card { padding: 25px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="hero-bg"></div>
+    <div class="container">
+        <div class="navbar">
+            <div class="logo">
+                <h1>🌍 UNDP <span>ImpactMapper</span></h1>
+                <p>Unified Crisis Intelligence Platform</p>
+            </div>
+            <div class="nav-links">
+                <a href="#">Explore</a>
+                <a href="#">Learn</a>
+                <a href="#">About</a>
+                <a href="#">Support</a>
+                <select id="languageSelect" class="language-select">
+                    <option value="en">🌍 English</option>
+                    <option value="es">🇪🇸 Español</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="pt">🇵🇹 Português</option>
+                    <option value="ar">🇸🇦 العربية</option>
+                    <option value="zh">🇨🇳 中文</option>
+                </select>
+            </div>
+        </div>
+        <div class="hero-section">
+            <div class="hero-left">
+                <div class="hero-badge">🌍 United Nations Development Programme</div>
+                <h1>EMPOWERING<br>CRISIS RESPONSE</h1>
+                <p>By leveraging artificial intelligence to create maps, coordinate rescue efforts, and provide vital information for sustainable development in communities facing disaster.</p>
+                <div class="stats">
+                    <div class="stat-item"><div class="stat-number">350+</div><div class="stat-label">Active Volunteers</div></div>
+                    <div class="stat-item"><div class="stat-number">12+</div><div class="stat-label">Rescue Teams</div></div>
+                    <div class="stat-item"><div class="stat-number">1,250+</div><div class="stat-label">Reports Submitted</div></div>
+                </div>
+            </div>
+            <div class="hero-right">
+                <div class="login-card">
+                    <h2>Access Unified Dashboard</h2>
+                    <p>Login to access Command Center & Analytics</p>
+                    <div class="input-group"><input type="text" id="username" placeholder="Username"></div>
+                    <div class="input-group"><input type="password" id="password" placeholder="Password"></div>
+                    <button class="login-btn" onclick="login()">🔐 Login to ImpactMapper</button>
+                    <div id="errorMsg" style="color:#e74c3c; font-size:12px; margin-top:12px; text-align:center;"></div>
+                    <div class="demo-info">
+                        <p>Demo Accounts:</p>
+                        <div class="demo-badge">
+                            <span class="demo-role">👑 admin / admin123 (Full Access + Analytics)</span>
+                            <span class="demo-role">📸 reporter / report123 (Submit reports)</span>
+                            <span class="demo-role">👁️ viewer / view123 (View only)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <div class="partner-logos">
+                <span class="partner">🔴 American Red Cross</span>
+                <span class="partner">🇺🇳 UN OCHA</span>
+                <span class="partner">🌾 World Food Programme</span>
+                <span class="partner">🏥 World Health Organization</span>
+                <span class="partner">🚒 FEMA</span>
+                <span class="partner">🗺️ OpenStreetMap</span>
+            </div>
+            <p>© <span id="currentYear"></span> UNDP ImpactMapper - Unified Crisis Intelligence Platform</p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('currentYear').innerText = new Date().getFullYear();
+        const langSelect = document.getElementById('languageSelect');
+        async function setLanguage(lang) { try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {} }
+        langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMsg');
+            if (!username || !password) { errorDiv.innerText = 'Please enter username and password'; return; }
+            try {
+                const response = await fetch('/dashboard', { headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) } });
+                if (response.ok) { window.location.href = '/dashboard'; } 
+                else { errorDiv.innerText = 'Invalid credentials'; }
+            } catch(e) { errorDiv.innerText = 'Login failed'; }
+        }
+        document.getElementById('password').addEventListener('keypress', function(e) { if (e.key === 'Enter') login(); });
+        setLanguage('en');
+    </script>
 </body>
 </html>
 """
 
 # ============================================
-# FULL UNIFIED DASHBOARD HTML – compact header + OSM map
+# UNIFIED DASHBOARD HTML – (compact header + OSM map)
+# (Same as the compact version you approved earlier – kept unchanged)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
