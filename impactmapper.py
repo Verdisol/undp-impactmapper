@@ -793,7 +793,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (BIGGER FONTS, SCROLL FIXED)
+# UNIFIED DASHBOARD HTML – FULLY UPDATED
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1053,6 +1053,7 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .map-container {
             flex: 1;
+            min-height: 150px;
             position: relative;
         }
         #map {
@@ -1185,22 +1186,19 @@ UNIFIED_DASHBOARD_HTML = """
         .leaderboard-item:hover { background: rgba(46,204,113,0.1); }
         .rank { width: 28px; font-weight: 700; color: #f39c12; }
 
+        /* ===== CHARTS SECTION - ALWAYS VISIBLE, NO TOGGLE ===== */
         .charts-section {
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(5px);
             padding: 12px 18px 18px 18px;
             margin: 8px 10px;
             border-radius: 12px;
-            transition: all 0.3s ease;
+            transition: none;
             flex-shrink: 0;
-            max-height: 240px;
+            height: 220px;
             overflow: hidden;
+            display: block !important;
         }
-        .charts-section.collapsed {
-            max-height: 50px;
-            padding: 10px 18px;
-        }
-        .charts-section.collapsed .charts-grid { display: none; }
         .charts-title {
             font-size: 1.1rem;
             font-weight: 700;
@@ -1211,16 +1209,6 @@ UNIFIED_DASHBOARD_HTML = """
             align-items: center;
             gap: 12px;
         }
-        .toggle-charts-btn {
-            background: rgba(0,0,0,0.06);
-            border: none;
-            border-radius: 20px;
-            padding: 0px 14px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            color: #1a1a1a;
-        }
-        .toggle-charts-btn:hover { background: rgba(0,0,0,0.12); }
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -1231,10 +1219,10 @@ UNIFIED_DASHBOARD_HTML = """
             background: rgba(255, 255, 255, 0.9);
             border-radius: 8px;
             padding: 12px;
-            min-height: 140px;
+            min-height: 130px;
         }
         .chart-container h4 { text-align: center; margin-bottom: 6px; color: #1a1a1a; font-size: 0.85rem; }
-        canvas { max-height: 120px; width: 100% !important; height: auto !important; }
+        canvas { max-height: 110px; width: 100% !important; height: auto !important; }
 
         .chat-panel {
             position: fixed !important;
@@ -1463,6 +1451,9 @@ UNIFIED_DASHBOARD_HTML = """
                 padding: 2px 8px !important;
                 height: 28px !important;
             }
+            .charts-section { height: 180px; }
+            .charts-grid { grid-template-columns: 1fr; gap: 8px; }
+            .chart-container { min-height: 100px; }
         }
     </style>
 </head>
@@ -1591,10 +1582,10 @@ UNIFIED_DASHBOARD_HTML = """
 
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
+            <!-- ===== CHARTS SECTION - ALWAYS VISIBLE ===== -->
             <div class="charts-section" id="chartsSection">
                 <div class="charts-title">
                     📊 DAMAGE ANALYTICS DASHBOARD
-                    <button class="toggle-charts-btn" id="toggleChartsBtn" title="Toggle charts visibility">▲</button>
                 </div>
                 <div class="charts-grid">
                     <div class="chart-container"><h4>🥧 Damage Distribution</h4><canvas id="pieChart"></canvas></div>
@@ -2067,14 +2058,24 @@ async function loadCurrentUser() {
     } catch(e) { console.error('Auth error',e); }
 }
 
+// ============================================================
+// FIXED: Leaderboard with try-catch (silences fetch error)
+// ============================================================
 async function loadLeaderboard() {
     try {
         let res = await fetch('/api/leaderboard');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         let leaders = await res.json();
         let container = document.getElementById('leaderboardList');
-        if(!container) return;
-        container.innerHTML = leaders.map((l,i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
-    } catch(e) { console.error(e); }
+        if (!container) return;
+        container.innerHTML = leaders.map((l,i) => 
+            `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`
+        ).join('');
+    } catch(e) {
+        console.warn('Leaderboard unavailable:', e.message);
+        let container = document.getElementById('leaderboardList');
+        if (container) container.innerHTML = '⚠️ Leaderboard unavailable';
+    }
 }
 
 async function loadStats() { try { let res=await fetch('/api/stats'); let stats=await res.json(); document.getElementById('totalReports').innerText=stats.total_reports; document.getElementById('todayReports').innerText=stats.today_reports; document.getElementById('pendingSync').innerText=stats.pending_sync; } catch(e){} }
@@ -2194,18 +2195,8 @@ if (chatInput) chatInput.addEventListener('keydown', function(e) {
     });
 })();
 
-// ===== TOGGLE CHARTS & SIDEBAR =====
+// ===== TOGGLE SIDEBAR (KEPT, CHARTS TOGGLE REMOVED) =====
 document.addEventListener('DOMContentLoaded', function() {
-    const toggleBtn = document.getElementById('toggleChartsBtn');
-    const chartsSection = document.getElementById('chartsSection');
-    let chartsVisible = true;
-    toggleBtn.addEventListener('click', function() {
-        chartsVisible = !chartsVisible;
-        chartsSection.classList.toggle('collapsed', !chartsVisible);
-        toggleBtn.textContent = chartsVisible ? '▲' : '▼';
-        setTimeout(() => { if (map) map.invalidateSize(); }, 300);
-    });
-
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('sidebarPanel');
     let sidebarVisible = true;
