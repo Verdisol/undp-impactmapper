@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – export options kept, but reduced in size
+# UNIFIED DASHBOARD HTML – header height increased to 75px
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -707,7 +707,7 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ---- HEADER with increased width ---- */
+        /* ---- HEADER with increased width and height 75px ---- */
         .system-bar {
             background: #1a472a;
             padding: 6px 40px !important;   /* increased horizontal padding */
@@ -715,15 +715,15 @@ UNIFIED_DASHBOARD_HTML = """
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2ecc71;
-            min-height: 56px !important;
-            height: 56px !important;
+            min-height: 75px !important;
+            height: 75px !important;
         }
         .brand-center {
             flex: 1;
             text-align: center;
         }
         .brand-center h1 {
-            font-size: 1.2rem !important;
+            font-size: 1.4rem !important;   /* slightly larger for 75px height */
             font-weight: 700;
             color: white;
             letter-spacing: 0.5px;
@@ -732,22 +732,22 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .brand-center h1 span { color: #2ecc71; }
         .brand-center p {
-            font-size: 0.6rem !important;
+            font-size: 0.75rem !important;   /* larger to fill height */
             color: rgba(255,255,255,0.75);
-            margin-top: 0px;
+            margin-top: 2px;
             line-height: 1.2;
         }
         .controls-right {
             display: flex;
             align-items: center;
-            gap: 6px !important;
+            gap: 8px !important;
             flex-wrap: nowrap;
         }
 
         /* ---- REDUCED, BLACK BOLD CONTROLS ---- */
         .sync-btn, .logout-btn, .lang-dropdown, .status-badge, .role-badge {
-            font-size: 0.65rem !important;
-            padding: 3px 8px !important;
+            font-size: 0.7rem !important;
+            padding: 4px 10px !important;
             border-radius: 4px !important;
             font-weight: 700 !important;
             color: #000 !important;
@@ -788,22 +788,22 @@ UNIFIED_DASHBOARD_HTML = """
             color: #000 !important;
             border: 1px solid #ccc !important;
             padding: 2px 6px !important;
-            font-size: 0.6rem !important;
+            font-size: 0.65rem !important;
         }
         .role-badge {
             background: rgba(255,255,200,0.85) !important;
             color: #000 !important;
         }
 
-        /* ---- EXPORT BUTTONS IN HEADER – kept, but REDUCED by ~60% ---- */
+        /* ---- EXPORT BUTTONS IN HEADER – kept, but REDUCED ---- */
         #headerExportGroup {
-            display: inline-flex !important;  /* visible */
+            display: inline-flex !important;
             gap: 4px;
             align-items: center;
         }
         #headerExportGroup .sync-btn {
-            font-size: 0.5rem !important;      /* smaller */
-            padding: 2px 5px !important;
+            font-size: 0.55rem !important;
+            padding: 2px 6px !important;
             background: rgba(255,255,255,0.8) !important;
             border: 1px solid rgba(0,0,0,0.08) !important;
             border-radius: 3px !important;
@@ -818,12 +818,10 @@ UNIFIED_DASHBOARD_HTML = """
             box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
         }
 
-        /* override icon sizes inside these controls */
         .sync-btn i, .logout-btn i, .status-badge i, .role-badge i {
             font-size: 0.8em !important;
         }
 
-        /* remove glowing animation from status badge – we keep it simple */
         .status-online {
             animation: none !important;
             box-shadow: none !important;
