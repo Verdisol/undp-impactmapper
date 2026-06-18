@@ -1,3 +1,427 @@
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import uvicorn
+import os
+import json
+import hashlib
+import uuid
+import urllib.request
+import urllib.parse
+from datetime import datetime
+from typing import Optional, List, Dict
+import asyncpg
+from contextlib import asynccontextmanager
+
+# ============================================
+# FIX: Use /tmp for writable storage on Vercel
+# ============================================
+PHOTOS_DIR = "/tmp/photos"
+EXPORTS_DIR = "/tmp/exports"
+os.makedirs(PHOTOS_DIR, exist_ok=True)
+os.makedirs(EXPORTS_DIR, exist_ok=True)
+
+security = HTTPBasic()
+
+# Database connection pool
+db_pool = None
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+async def init_db():
+    global db_pool
+    db_pool = await asyncpg.create_pool(DATABASE_URL)
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id SERIAL PRIMARY KEY,
+                report_uuid TEXT UNIQUE NOT NULL,
+                building_id TEXT,
+                building_osm_id TEXT,
+                building_name TEXT,
+                building_address TEXT,
+                damage_level TEXT,
+                version INTEGER DEFAULT 1,
+                photo_path TEXT,
+                lat REAL,
+                lng REAL,
+                location_text TEXT,
+                infrastructure_type TEXT,
+                crisis_nature TEXT,
+                debris TEXT,
+                notes TEXT,
+                username TEXT,
+                timestamp TEXT,
+                is_current INTEGER DEFAULT 1,
+                synced INTEGER DEFAULT 1,
+                sms_number TEXT
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'viewer',
+                avatar TEXT DEFAULT '🌍',
+                color TEXT DEFAULT '#2ecc71',
+                points INTEGER DEFAULT 0,
+                verified_reports INTEGER DEFAULT 0,
+                badge_level TEXT DEFAULT 'Citizen Reporter',
+                created_at TEXT,
+                phone_number TEXT
+            )
+        """)
+        default_users = [
+            ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin", "👑", "#e74c3c", 5000, 250, "🏆 Master Responder", "+1234567890"),
+            ("reporter", hashlib.sha256("report123".encode()).hexdigest(), "reporter", "📸", "#2ecc71", 1250, 65, "⭐ Senior Responder", "+1234567891"),
+            ("viewer", hashlib.sha256("view123".encode()).hexdigest(), "viewer", "👁️", "#3498db", 0, 0, "🆕 Citizen Reporter", ""),
+        ]
+        for user in default_users:
+            await conn.execute("""
+                INSERT INTO users (username, password_hash, role, avatar, color, points, verified_reports, badge_level, created_at, phone_number)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (username) DO NOTHING
+            """, *user + (datetime.now().isoformat(),))
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+    if db_pool:
+        await db_pool.close()
+
+# ============================================
+# CREATE THE FASTAPI APP INSTANCE
+# ============================================
+app = FastAPI(title="UNDP ImpactMapper", version="27.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================
+# OSM BUILDING LOOKUP
+# ============================================
+def get_building_at_location(lat: float, lng: float):
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json];
+        (
+          way["building"](around:10,{lat},{lng});
+          relation["building"](around:10,{lat},{lng});
+        );
+        out body;
+        >;
+        out skel qt;
+        """
+        params = urllib.parse.urlencode({'data': query}).encode()
+        req = urllib.request.Request(overpass_url, data=params, headers={'User-Agent': 'UNDP-ImpactMapper/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            for element in data.get("elements", []):
+                if element.get("type") in ["way", "relation"]:
+                    tags = element.get("tags", {})
+                    return {
+                        "osm_id": f"{element['type']}/{element['id']}",
+                        "name": tags.get("name", ""),
+                        "building_type": tags.get("building", "yes"),
+                        "address": f"{tags.get('addr:street', '')} {tags.get('addr:housenumber', '')}".strip()
+                    }
+    except Exception as e:
+        print(f"OSM lookup error: {e}")
+    return None
+
+# ============================================
+# DATABASE FUNCTIONS
+# ============================================
+async def save_report(report_uuid: str, building_id: str, building_osm_id: str, building_name: str, building_address: str,
+                damage_level: str, lat: float, lng: float, location_text: str, photo_path: str,
+                infrastructure_type: str, crisis_nature: str, debris: str, notes: str, username: str, synced: int = 1, sms_number: str = ""):
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO reports (report_uuid, building_id, building_osm_id, building_name, building_address,
+                                damage_level, version, lat, lng, location_text, photo_path,
+                                infrastructure_type, crisis_nature, debris, notes, username, timestamp, is_current, synced, sms_number)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        """, report_uuid, building_id, building_osm_id, building_name, building_address,
+           damage_level, 1, lat, lng, location_text, photo_path,
+           infrastructure_type, crisis_nature, debris, notes, username, datetime.now().isoformat(), 1, synced, sms_number)
+
+async def get_reports_db(limit: int = 200):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT report_uuid, damage_level, lat, lng, location_text, infrastructure_type,
+                   building_name, building_address, crisis_nature, debris,
+                   notes, timestamp, username, photo_path
+            FROM reports WHERE is_current = 1 ORDER BY timestamp DESC LIMIT $1
+        """, limit)
+        return [{
+            "report_uuid": r[0], "damage_level": r[1], "lat": r[2], "lng": r[3],
+            "location_text": r[4] or "", "infrastructure_type": r[5],
+            "building_name": r[6] or "", "building_address": r[7] or "",
+            "crisis_nature": r[8], "debris": r[9],
+            "notes": r[10] or "", "timestamp": r[11], "username": r[12],
+            "photo_url": f"/photos/{os.path.basename(r[13])}" if r[13] else None
+        } for r in rows]
+
+async def get_leaderboard_db(limit: int = 15):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT username, points, verified_reports, badge_level, avatar, color FROM users ORDER BY points DESC LIMIT $1", limit)
+        return [{"username": r[0], "points": r[1], "verified_reports": r[2], "badge": r[3], "avatar": r[4], "color": r[5]} for r in rows]
+
+async def update_user_points(username: str, points_increment: int = 10):
+    async with db_pool.acquire() as conn:
+        await conn.execute("UPDATE users SET points = points + $1, verified_reports = verified_reports + 1 WHERE username = $2", points_increment, username)
+
+# ============================================
+# AUTHENTICATION
+# ============================================
+async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT password_hash, role, avatar, color, points, badge_level FROM users WHERE username = $1", credentials.username)
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+        if password_hash != row[0]:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return {"username": credentials.username, "role": row[1], "avatar": row[2], "color": row[3], "points": row[4], "badge": row[5]}
+
+def require_admin(current_user: dict = Depends(verify_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+def require_reporter(current_user: dict = Depends(verify_user)):
+    if current_user["role"] not in ["admin", "reporter"]:
+        raise HTTPException(status_code=403, detail="Reporter access required")
+    return current_user
+
+# ============================================
+# LANGUAGES DICTIONARY (shortened for brevity)
+# ============================================
+LANGUAGES = {
+    "en": {"name": "English", "flag": "🇬🇧", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
+    "es": {"name": "Español", "flag": "🇪🇸", "report_damage": "Reportar Daños", "damage_level": "Nivel de Daño", "minimal": "Daño Mínimo", "partial": "Daño Parcial", "complete": "Destruido", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Gobierno", "utility": "Utilidad", "transport": "Transporte", "community": "Comunitario", "public": "Público", "crisis": "Crisis", "earthquake": "Terremoto", "flood": "Inundación", "tsunami": "Tsunami", "hurricane": "Huracán", "wildfire": "Incendio", "explosion": "Explosión", "conflict": "Conflicto", "debris": "¿Escombros?", "yes": "Sí", "no": "No", "submit": "Enviar", "gps_location": "Usar GPS", "building_name": "Nombre", "photo": "Foto", "notes": "Notas", "recent_reports": "Reportes", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntarios", "rescue_teams": "Rescate", "online_users": "En línea", "leaderboard": "Clasificación", "chat": "Chat", "type_message": "Escribe...", "send": "Enviar", "click_building": "🏢 ¡Haga clic en cualquier edificio!", "total_reports": "Total", "today_reports": "Hoy", "pending_sync": "Pendiente", "logout": "Salir", "sync_now": "Sincronizar", "sms_report": "Reporte SMS", "sms_placeholder": "Formato: DAÑO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Mando", "analytics": "Analíticas"},
+    "fr": {"name": "Français", "flag": "🇫🇷", "report_damage": "Signaler", "damage_level": "Niveau", "minimal": "Minime", "partial": "Partiel", "complete": "Complet", "infrastructure": "Type", "residential": "Résidentiel", "commercial": "Commercial", "government": "Gouvernement", "utility": "Utilitaire", "transport": "Transport", "community": "Communautaire", "public": "Public", "crisis": "Crise", "earthquake": "Tremblement", "flood": "Inondation", "tsunami": "Tsunami", "hurricane": "Ouragan", "wildfire": "Incendie", "explosion": "Explosion", "conflict": "Conflit", "debris": "Débris?", "yes": "Oui", "no": "Non", "submit": "Soumettre", "gps_location": "Mon GPS", "building_name": "Nom", "photo": "Photo", "notes": "Notes", "recent_reports": "Rapports", "export_data": "Exporter", "export_csv": "Exporter CSV", "export_geojson": "Exporter GeoJSON", "active_volunteers": "Bénévoles", "rescue_teams": "Secours", "online_users": "En ligne", "leaderboard": "Classement", "chat": "Chat", "type_message": "Message...", "send": "Envoyer", "click_building": "🏢 Cliquez sur un bâtiment!", "total_reports": "Total", "today_reports": "Aujourd'hui", "pending_sync": "En attente", "logout": "Déconnexion", "sync_now": "Synchroniser", "sms_report": "Rapport SMS", "sms_placeholder": "Format: DÉGÂT LAT LNG", "sms_send": "Envoyer SMS", "command_center": "Centre de Commandement", "analytics": "Analytique"},
+    "pt": {"name": "Português", "flag": "🇵🇹", "report_damage": "Relatar", "damage_level": "Nível", "minimal": "Mínimo", "partial": "Parcial", "complete": "Completo", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Governo", "utility": "Utilidade", "transport": "Transporte", "community": "Comunitário", "public": "Público", "crisis": "Crise", "earthquake": "Terremoto", "flood": "Inundação", "tsunami": "Tsunami", "hurricane": "Furacão", "wildfire": "Incêndio", "explosion": "Explosão", "conflict": "Conflito", "debris": "Detritos?", "yes": "Sim", "no": "Não", "submit": "Enviar", "gps_location": "Meu GPS", "building_name": "Nome", "photo": "Foto", "notes": "Notas", "recent_reports": "Relatórios", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntários", "rescue_teams": "Resgate", "online_users": "Online", "leaderboard": "Ranking", "chat": "Chat", "type_message": "Digite...", "send": "Enviar", "click_building": "🏢 Clique em qualquer edifício!", "total_reports": "Total", "today_reports": "Hoje", "pending_sync": "Pendente", "logout": "Sair", "sync_now": "Sincronizar", "sms_report": "Relatório SMS", "sms_placeholder": "Formato: DANO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Comando", "analytics": "Análises"},
+    "ar": {"name": "العربية", "flag": "🇸🇦", "report_damage": "الإبلاغ", "damage_level": "المستوى", "minimal": "بسيط", "partial": "جزئي", "complete": "كامل", "infrastructure": "النوع", "residential": "سكني", "commercial": "تجاري", "government": "حكومي", "utility": "مرافق", "transport": "مواصلات", "community": "مجتمعي", "public": "عام", "crisis": "الأزمة", "earthquake": "زلزال", "flood": "فيضان", "tsunami": "تسونامي", "hurricane": "إعصار", "wildfire": "حرائق", "explosion": "انفجار", "conflict": "صراع", "debris": "حطام؟", "yes": "نعم", "no": "لا", "submit": "إرسال", "gps_location": "موقعي", "building_name": "الاسم", "photo": "صورة", "notes": "ملاحظات", "recent_reports": "التقارير", "export_data": "تصدير", "export_csv": "CSV", "export_geojson": "GeoJSON", "active_volunteers": "متطوعين", "rescue_teams": "إنقاذ", "online_users": "متصل", "leaderboard": "المتصدرين", "chat": "محادثة", "type_message": "اكتب...", "send": "إرسال", "click_building": "🏢 انقر على أي مبنى!", "total_reports": "الإجمالي", "today_reports": "اليوم", "pending_sync": "معلق", "logout": "خروج", "sync_now": "مزامنة", "sms_report": "تقرير SMS", "sms_placeholder": "التنسيق: ضرر خط طول", "sms_send": "إرسال SMS", "command_center": "مركز القيادة", "analytics": "تحليلات"},
+    "zh": {"name": "中文", "flag": "🇨🇳", "report_damage": "报告损坏", "damage_level": "损坏程度", "minimal": "轻微", "partial": "部分", "complete": "完全", "infrastructure": "类型", "residential": "住宅", "commercial": "商业", "government": "政府", "utility": "公用", "transport": "交通", "community": "社区", "public": "公共", "crisis": "危机类型", "earthquake": "地震", "flood": "洪水", "tsunami": "海啸", "hurricane": "飓风", "wildfire": "野火", "explosion": "爆炸", "conflict": "冲突", "debris": "碎片？", "yes": "是", "no": "否", "submit": "提交", "gps_location": "我的位置", "building_name": "建筑名称", "photo": "照片", "notes": "备注", "recent_reports": "最近报告", "export_data": "导出数据", "export_csv": "导出CSV", "export_geojson": "导出GeoJSON", "active_volunteers": "志愿者", "rescue_teams": "救援队", "online_users": "在线", "leaderboard": "排行榜", "chat": "聊天", "type_message": "输入消息...", "send": "发送", "click_building": "🏢 点击地图上的建筑物！", "total_reports": "报告总数", "today_reports": "今日", "pending_sync": "待同步", "logout": "退出", "sync_now": "立即同步", "sms_report": "短信报告", "sms_placeholder": "格式: 损坏 纬度 经度", "sms_send": "发送短信", "command_center": "指挥中心", "analytics": "分析"}
+}
+
+# ============================================
+# API ENDPOINTS
+# ============================================
+@app.get("/")
+async def login_page():
+    return HTMLResponse(LOGIN_HTML)
+
+@app.get("/dashboard")
+async def unified_dashboard(current_user: dict = Depends(verify_user)):
+    return HTMLResponse(UNIFIED_DASHBOARD_HTML)
+
+@app.get("/api/lang/{lang}")
+async def get_language(lang: str):
+    return LANGUAGES.get(lang, LANGUAGES["en"])
+
+@app.get("/api/current_user")
+async def get_current_user(current_user: dict = Depends(verify_user)):
+    return current_user
+
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    return await get_leaderboard_db(15)
+
+@app.get("/api/building/{lat}/{lng}")
+async def get_building_info(lat: float, lng: float):
+    building = get_building_at_location(lat, lng)
+    return building if building else None
+
+@app.post("/api/report")
+async def create_report(
+    damage_level: str = Form(...),
+    infrastructure_type: str = Form(...),
+    building_name: str = Form(""),
+    building_address: str = Form(""),
+    building_osm_id: str = Form(""),
+    crisis_nature: str = Form(...),
+    debris: str = Form(...),
+    text_location: str = Form(""),
+    lat: Optional[float] = Form(None),
+    lng: Optional[float] = Form(None),
+    notes: str = Form(""),
+    sms_number: str = Form(""),
+    photo: UploadFile = File(None),
+    current_user: dict = Depends(require_reporter)
+):
+    photo_path = None
+    if photo and photo.filename:
+        ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
+        photo_filename = f"{datetime.now().timestamp()}_{current_user['username']}_{uuid.uuid4().hex[:6]}.{ext}"
+        photo_path = os.path.join(PHOTOS_DIR, photo_filename)
+        content = await photo.read()
+        with open(photo_path, "wb") as f:
+            f.write(content)
+    
+    if lat and lng:
+        building_id = f"bld_{lat}_{lng}"
+    else:
+        building_id = f"bld_txt_{hashlib.md5(text_location.encode()).hexdigest()[:10]}"
+    
+    report_uuid = str(uuid.uuid4())[:8]
+    
+    await save_report(
+        report_uuid, building_id, building_osm_id, building_name, building_address,
+        damage_level, lat or 0, lng or 0, text_location, photo_path,
+        infrastructure_type, crisis_nature, debris, notes, current_user['username'], 1, sms_number
+    )
+    
+    await update_user_points(current_user['username'], 10)
+    
+    return {"status": "success", "report_uuid": report_uuid, "lat": lat, "lng": lng}
+
+@app.post("/api/sms_report")
+async def sms_report(
+    sms_text: str = Form(...),
+    sms_number: str = Form("")
+):
+    parts = sms_text.upper().split()
+    if len(parts) >= 3:
+        damage_level = parts[0].lower()
+        try:
+            lat = float(parts[1])
+            lng = float(parts[2])
+            notes = " ".join(parts[3:]) if len(parts) > 3 else "SMS Report"
+            report_uuid = str(uuid.uuid4())[:8]
+            building_id = f"sms_{lat}_{lng}"
+            await save_report(
+                report_uuid, building_id, "", "", "",
+                damage_level, lat, lng, "", None,
+                "unknown", "earthquake", "no", notes, "sms_user", 1, sms_number
+            )
+            return {"status": "success", "message": "SMS report received", "lat": lat, "lng": lng}
+        except ValueError:
+            return {"status": "error", "message": "Invalid coordinates"}
+    return {"status": "error", "message": "Invalid SMS format. Use: DAMAGE_TYPE LAT LNG"}
+
+@app.post("/api/sync")
+async def sync_offline_reports(reports_data: List[Dict], current_user: dict = Depends(require_reporter)):
+    synced_count = 0
+    for report in reports_data:
+        try:
+            async with db_pool.acquire() as conn:
+                existing = await conn.fetchval("SELECT report_uuid FROM reports WHERE report_uuid = $1", report.get('report_uuid'))
+                if not existing:
+                    await conn.execute("""
+                        INSERT INTO reports (report_uuid, building_id, damage_level, lat, lng, location_text,
+                                            infrastructure_type, building_name, crisis_nature, debris,
+                                            notes, username, timestamp, synced, is_current)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    """, report.get('report_uuid'), report.get('building_id'), report.get('damage_level'),
+                        report.get('lat'), report.get('lng'), report.get('location_text'),
+                        report.get('infrastructure_type'), report.get('building_name'), report.get('crisis_nature'),
+                        report.get('debris'), report.get('notes'), current_user['username'],
+                        report.get('timestamp'), 1, 1)
+                    synced_count += 1
+                    await update_user_points(current_user['username'], 10)
+        except Exception as e:
+            print(f"Sync error: {e}")
+    return {"synced": synced_count}
+
+@app.get("/api/reports")
+async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
+    return await get_reports_db(limit)
+
+@app.get("/api/reports/geojson")
+async def get_geojson(current_user: dict = Depends(require_reporter)):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT damage_level, lat, lng, infrastructure_type, crisis_nature, building_name, timestamp FROM reports WHERE lat != 0 AND is_current = 1")
+    features = []
+    for r in rows:
+        if r[1] and r[2]:
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [float(r[2]), float(r[1])]},
+                "properties": {
+                    "damage_level": r[0], "infrastructure_type": r[3],
+                    "crisis_nature": r[4], "building_name": r[5], "timestamp": r[6]
+                }
+            })
+    return {"type": "FeatureCollection", "features": features}
+
+@app.get("/api/reports/csv")
+async def export_csv(current_user: dict = Depends(require_reporter)):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT damage_level, lat, lng, building_name, building_address, infrastructure_type, crisis_nature, debris, notes, timestamp, username FROM reports WHERE is_current = 1 ORDER BY timestamp DESC")
+    csv = "Damage Level,Latitude,Longitude,Building Name,Building Address,Infrastructure Type,Crisis Nature,Debris,Notes,Timestamp,Username\n"
+    for r in rows:
+        lat_val = f"{r[1]:.6f}" if r[1] else ""
+        lng_val = f"{r[2]:.6f}" if r[2] else ""
+        csv += f"{r[0]},{lat_val},{lng_val},\"{r[3] or ''}\",\"{r[4] or ''}\",{r[5]},{r[6]},{r[7]},\"{r[8] or ''}\",{r[9]},{r[10]}\n"
+    return HTMLResponse(csv, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=impact_reports.csv"})
+
+@app.get("/api/stats")
+async def get_stats():
+    async with db_pool.acquire() as conn:
+        total = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE is_current = 1")
+        today = datetime.now().date().isoformat()
+        today_count = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE DATE(timestamp) = $1 AND is_current = 1", today)
+        pending = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE synced = 0")
+    return {"total_reports": total, "today_reports": today_count, "pending_sync": pending, "active_volunteers": 350, "rescue_teams": 12, "responders": 48}
+
+@app.get("/photos/{filename}")
+async def serve_photo(filename: str):
+    file_path = os.path.join(PHOTOS_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    old_path = f"photos/{filename}"
+    if os.path.exists(old_path):
+        return FileResponse(old_path)
+    raise HTTPException(status_code=404, detail="Photo not found")
+
+# ============================================
+# LOGIN HTML (shortened for brevity)
+# ============================================
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html>
+<head><title>UNDP ImpactMapper - Login</title></head>
+<body style="font-family:Inter,sans-serif;background:#0a2a1a;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
+<div style="background:rgba(17,17,17,0.95);padding:40px;border-radius:16px;border:1px solid #2ecc71;width:400px;">
+<h2 style="color:white;text-align:center;">🌍 UNDP ImpactMapper</h2>
+<p style="color:#888;text-align:center;">Login to Command Center</p>
+<input type="text" id="username" placeholder="Username" style="width:100%;padding:14px;margin:10px 0;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:12px;color:white;">
+<input type="password" id="password" placeholder="Password" style="width:100%;padding:14px;margin:10px 0;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:12px;color:white;">
+<button onclick="login()" style="width:100%;padding:14px;background:#2ecc71;color:white;font-weight:700;border:none;border-radius:12px;cursor:pointer;">🔐 Login</button>
+<div id="error" style="color:#e74c3c;margin-top:12px;text-align:center;"></div>
+<div style="margin-top:20px;padding-top:20px;border-top:1px solid #2a2a2a;text-align:center;font-size:11px;color:#666;">
+Demo accounts: admin/admin123, reporter/report123, viewer/view123
+</div>
+</div>
+<script>
+async function login(){
+    const u=document.getElementById('username').value, p=document.getElementById('password').value;
+    if(!u||!p){document.getElementById('error').innerText='Please enter username and password';return;}
+    try{
+        const res=await fetch('/dashboard',{headers:{'Authorization':'Basic '+btoa(u+':'+p)}});
+        if(res.ok) window.location.href='/dashboard';
+        else document.getElementById('error').innerText='Invalid credentials';
+    }catch(e){document.getElementById('error').innerText='Login failed';}
+}
+document.getElementById('password').addEventListener('keypress',e=>{if(e.key==='Enter')login();});
+</script>
+</body>
+</html>
+"""
+
+# ============================================
+# UNIFIED DASHBOARD HTML (LOCAL CHAT, NO WEBSOCKET)
+# ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -21,20 +445,231 @@ UNIFIED_DASHBOARD_HTML = """
             --bg-sidebar: #1a1d23;
             --border-color: #2a2d35;
             --primary: #2ecc71;
-            --primary-dark: #27ae60;
-            --primary-muted: rgba(46,204,113,0.12);
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --info: #3498db;
         }
-
-        /* ----- GLOWING + DRAGGABLE CHAT (no WebSocket) ----- */
+        .system-bar {
+            background: #1a472a;
+            padding: 6px 16px !important;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #2ecc71;
+            min-height: 48px;
+        }
+        .brand-center h1 { font-size: 1.1rem !important; font-weight: 700; color: white; letter-spacing: 1px; }
+        .brand-center p { font-size: 0.55rem !important; color: rgba(255,255,255,0.7); margin-top: 1px; }
+        .controls-right { gap: 6px !important; display: flex; align-items: center; flex-wrap: wrap; }
+        .controls-right .sync-btn, .controls-right .logout-btn { padding: 3px 8px !important; font-size: 0.6rem !important; background: rgba(255,255,255,0.15); border: none; border-radius: 8px; color: white; cursor: pointer; transition: all 0.3s ease; white-space: nowrap; }
+        .controls-right .sync-btn:hover { background: rgba(255,255,255,0.25); }
+        .controls-right .logout-btn { background: rgba(231,76,60,0.3); }
+        .controls-right .logout-btn:hover { background: rgba(231,76,60,0.5); }
+        .controls-right .lang-dropdown { padding: 3px 6px !important; font-size: 0.6rem !important; background: rgba(255,255,255,0.15); color: white; border: none; border-radius: 8px; cursor: pointer; }
+        .controls-right .role-badge { font-size: 0.55rem !important; padding: 2px 6px !important; background: rgba(0,0,0,0.3); color: #2ecc71; border-radius: 30px; }
+        .status-badge { padding: 3px 8px; border-radius: 30px; font-size: 0.6rem; font-weight: 500; display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.3); }
+        .status-online { color: #2ecc71; }
+        .tabs-container {
+            background: var(--bg-card);
+            padding: 0 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 4px;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            background: transparent;
+            color: #a0a0a0;
+            border: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .tab-btn:hover { color: var(--primary); background: var(--primary-muted); transform: translateY(-2px); }
+        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+        .tab-content { display: none; height: calc(100vh - 110px); }
+        .tab-content.active { display: block; }
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-dark);
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border-radius: 6px;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .kpi-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 15px rgba(46,204,113,0.6); }
+        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .kpi-header span { font-size: 0.5rem; color: #a0a0a0; text-transform: uppercase; }
+        .kpi-value { font-size: 1.2rem; font-weight: 700; margin-bottom: 2px; }
+        .kpi-value.warning { color: #f39c12; }
+        .progress-bar { height: 2px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+        .progress-fill { height: 100%; background: var(--primary); border-radius: 2px; }
+        .pill-group { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+        .pill { padding: 1px 5px; border-radius: 12px; font-size: 0.5rem; font-weight: 500; }
+        .pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+        .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
+        .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
+        .main-layout { display: flex; height: calc(100% - 48px); }
+        .sidebar { width: 380px; background: var(--bg-sidebar); overflow-y: auto; padding: 12px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
+        .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
+        .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .map-container { flex: 1; position: relative; }
+        #map { height: 100%; width: 100%; }
+        .card {
+            background: rgba(42, 42, 42, 0.9);
+            backdrop-filter: blur(5px);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card h3 { color: #2ecc71; margin-bottom: 8px; font-size: 0.7rem; display: flex; align-items: center; gap: 5px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 5px;
+            margin: 4px 0;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.65rem;
+        }
+        button {
+            background: linear-gradient(135deg, #1a472a, #0d2a1a);
+            color: white;
+            padding: 6px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 4px;
+            font-size: 0.65rem;
+        }
+        .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .reports-list { max-height: 200px; overflow-y: auto; }
+        .report-item {
+            background: #1a1a1a;
+            padding: 6px 8px;
+            margin: 4px 0;
+            border-radius: 6px;
+            border-left: 3px solid #2ecc71;
+            cursor: pointer;
+            font-size: 0.6rem;
+        }
+        .report-item.severity-critical { border-left-color: #e74c3c; }
+        .report-item.severity-high { border-left-color: #f39c12; }
+        .building-info {
+            background: rgba(46,204,113,0.1);
+            padding: 6px;
+            border-radius: 6px;
+            margin-top: 4px;
+            font-size: 0.6rem;
+            text-align: center;
+            cursor: pointer;
+            border: 1px solid rgba(46,204,113,0.3);
+            color: #2ecc71;
+        }
+        .sms-card { background: rgba(46,204,113,0.08); padding: 6px; border-radius: 6px; margin-top: 4px; }
+        .photo-preview { margin-top: 4px; text-align: center; }
+        .photo-preview img { max-width: 100%; border-radius: 6px; max-height: 60px; }
+        .leaderboard-panel {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            width: 200px;
+            background: rgba(30,30,30,0.95);
+            backdrop-filter: blur(12px);
+            border-radius: 10px;
+            border: 1px solid rgba(243,156,18,0.2);
+            z-index: 1000;
+        }
+        .leaderboard-header {
+            padding: 6px 10px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+            font-size: 0.6rem;
+            font-weight: 600;
+            background: rgba(243,156,18,0.08);
+        }
+        .leaderboard-list { max-height: 120px; overflow-y: auto; padding: 4px; }
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 5px;
+            border-radius: 4px;
+            margin: 2px 0;
+            background: rgba(255,255,255,0.03);
+            font-size: 0.6rem;
+            cursor: pointer;
+        }
+        .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
+        .rank { width: 20px; font-weight: 700; color: #f39c12; }
+        .charts-section {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            padding: 8px 12px 12px 12px;
+            margin: 6px 8px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+            max-height: 220px;
+            overflow: hidden;
+        }
+        .charts-section.collapsed {
+            max-height: 40px;
+            padding: 6px 12px;
+        }
+        .charts-section.collapsed .charts-grid {
+            display: none;
+        }
+        .charts-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        .toggle-charts-btn {
+            background: rgba(0,0,0,0.1);
+            border: none;
+            border-radius: 30px;
+            padding: 1px 10px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: #1a1a1a;
+            transition: 0.2s;
+        }
+        .toggle-charts-btn:hover { background: rgba(0,0,0,0.2); }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 6px;
+        }
+        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 8px; }
+        .chart-container h4 { text-align: center; margin-bottom: 5px; color: #1a1a1a; font-size: 0.6rem; }
+        canvas { max-height: 120px; width: 100%; }
         .chat-panel {
             position: fixed !important;
             bottom: 20px !important;
             left: 20px !important;
             width: 340px !important;
+            min-width: 200px !important;
+            max-width: 500px !important;
             max-height: 480px !important;
+            min-height: 200px !important;
             background: rgba(18, 25, 40, 0.95) !important;
             backdrop-filter: blur(14px) !important;
             border-radius: 20px !important;
@@ -47,6 +682,7 @@ UNIFIED_DASHBOARD_HTML = """
             flex-direction: column !important;
             overflow: hidden !important;
             transition: box-shadow 0.3s ease !important;
+            resize: both !important;
         }
         .chat-panel:hover {
             box-shadow: 0 0 45px rgba(0, 255, 200, 0.45), 0 0 90px rgba(0, 255, 200, 0.2), inset 0 0 40px rgba(0, 255, 200, 0.06) !important;
@@ -57,7 +693,7 @@ UNIFIED_DASHBOARD_HTML = """
             100% { box-shadow: 0 0 45px rgba(0,255,200,0.45), 0 0 80px rgba(0,255,200,0.2), inset 0 0 30px rgba(0,255,200,0.04); }
         }
         .chat-header {
-            padding: 14px 18px !important;
+            padding: 10px 14px !important;
             background: rgba(0,255,200,0.06) !important;
             border-bottom: 1px solid rgba(0,255,200,0.12) !important;
             border-radius: 20px 20px 0 0 !important;
@@ -70,18 +706,18 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-header:active { cursor: grabbing !important; }
         .chat-header h4 {
             color: #00ffcc !important;
-            font-size: 0.9rem !important;
+            font-size: 0.75rem !important;
             font-weight: 700 !important;
             letter-spacing: 1px !important;
             text-shadow: 0 0 18px rgba(0,255,200,0.3) !important;
             display: flex !important;
             align-items: center !important;
-            gap: 10px !important;
+            gap: 8px !important;
         }
         .chat-header .pulse-dot {
             display: inline-block !important;
-            width: 10px !important;
-            height: 10px !important;
+            width: 8px !important;
+            height: 8px !important;
             background: #00ffcc !important;
             border-radius: 50% !important;
             box-shadow: 0 0 18px #00ffcc !important;
@@ -92,37 +728,37 @@ UNIFIED_DASHBOARD_HTML = """
             50% { opacity: 0.15; }
         }
         .chat-header .status-badge {
-            font-size: 0.7rem !important;
+            font-size: 0.55rem !important;
             background: rgba(0,255,200,0.12) !important;
-            padding: 2px 12px !important;
+            padding: 2px 10px !important;
             border-radius: 30px !important;
             color: #aaffee !important;
             border: 1px solid rgba(0,255,200,0.15) !important;
         }
         .chat-messages {
             flex: 1 !important;
-            padding: 10px 14px !important;
+            padding: 8px 12px !important;
             overflow-y: auto !important;
             max-height: 280px !important;
-            min-height: 160px !important;
+            min-height: 100px !important;
             display: flex !important;
             flex-direction: column !important;
-            gap: 5px !important;
+            gap: 4px !important;
             scroll-behavior: smooth !important;
             background: transparent !important;
         }
-        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar { width: 3px; }
         .chat-messages::-webkit-scrollbar-thumb {
             background: #00ffcc;
             border-radius: 10px;
             box-shadow: 0 0 12px #00ffcc;
         }
         .chat-message {
-            padding: 6px 12px !important;
-            border-radius: 14px !important;
+            padding: 5px 10px !important;
+            border-radius: 12px !important;
             max-width: 85% !important;
-            font-size: 0.75rem !important;
-            line-height: 1.4 !important;
+            font-size: 0.7rem !important;
+            line-height: 1.3 !important;
             animation: fadeInMsg 0.2s ease !important;
         }
         .chat-message.own {
@@ -142,32 +778,32 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-message .msg-username {
             font-weight: 700 !important;
             color: #00ffcc !important;
-            font-size: 0.7rem !important;
+            font-size: 0.6rem !important;
             display: block !important;
-            margin-bottom: 2px !important;
+            margin-bottom: 1px !important;
         }
         .chat-message .msg-time {
-            font-size: 0.6rem !important;
+            font-size: 0.5rem !important;
             opacity: 0.4 !important;
-            margin-left: 8px !important;
+            margin-left: 6px !important;
         }
         .chat-input-area {
-            padding: 8px 14px 14px 14px !important;
+            padding: 6px 12px 10px 12px !important;
             border-top: 1px solid rgba(0,255,200,0.08) !important;
             display: flex !important;
-            gap: 8px !important;
+            gap: 6px !important;
             align-items: center !important;
             flex-shrink: 0 !important;
             background: transparent !important;
         }
         .chat-input-area input {
             flex: 1 !important;
-            padding: 8px 14px !important;
+            padding: 6px 12px !important;
             border-radius: 30px !important;
             border: 1px solid rgba(0,255,200,0.15) !important;
             background: rgba(0,0,0,0.45) !important;
             color: #fff !important;
-            font-size: 0.75rem !important;
+            font-size: 0.7rem !important;
             outline: none !important;
         }
         .chat-input-area input:focus {
@@ -175,13 +811,13 @@ UNIFIED_DASHBOARD_HTML = """
             box-shadow: 0 0 25px rgba(0,255,200,0.12) !important;
         }
         .chat-input-area button {
-            padding: 8px 18px !important;
+            padding: 6px 14px !important;
             border-radius: 30px !important;
             border: none !important;
             background: #00ffcc !important;
             color: #0b0e14 !important;
             font-weight: 700 !important;
-            font-size: 0.75rem !important;
+            font-size: 0.65rem !important;
             cursor: pointer !important;
             box-shadow: 0 0 28px rgba(0,255,200,0.15) !important;
             transition: 0.2s !important;
@@ -196,285 +832,25 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-input-area button:active {
             transform: scale(0.96) !important;
         }
-
-        .tabs-container {
-            background: var(--bg-card);
-            padding: 0 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            gap: 4px;
+        .chat-panel::-webkit-resizer {
+            background: #00ffcc;
+            border-radius: 0 0 20px 0;
+            opacity: 0.3;
         }
-        .tab-btn {
-            padding: 14px 28px;
-            background: transparent;
-            color: #a0a0a0;
-            border: none;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .tab-btn:hover { color: var(--primary); background: var(--primary-muted); transform: translateY(-2px); }
-        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
-        .tab-content { display: none; height: calc(100vh - 130px); }
-        .tab-content.active { display: block; }
-        .system-bar {
-            background: #1a472a;
-            padding: 12px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #2ecc71;
-        }
-        .brand-left { width: 200px; visibility: hidden; }
-        .brand-center { flex: 1; text-align: center; }
-        .brand-center h1 { font-size: 1.4rem; font-weight: 700; color: white; letter-spacing: 1px; }
-        .brand-center h1 span { color: #2ecc71; }
-        .brand-center p { font-size: 0.65rem; color: rgba(255,255,255,0.8); margin-top: 2px; }
-        .controls-right {
-            width: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .lang-dropdown {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.7rem;
-        }
-        .lang-dropdown:hover { background: rgba(255,255,255,0.25); }
-        .status-badge {
-            padding: 3px 8px;
-            border-radius: 30px;
-            font-size: 0.65rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            background: rgba(0,0,0,0.3);
-        }
-        .status-online { color: #2ecc71; }
-        .sync-btn, .logout-btn {
-            background: rgba(255,255,255,0.15);
-            border: none;
-            padding: 5px 10px;
-            border-radius: 8px;
-            color: white;
-            font-size: 0.65rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            white-space: nowrap;
-        }
-        .sync-btn:hover { background: rgba(255,255,255,0.25); }
-        .logout-btn { background: rgba(231,76,60,0.3); }
-        .logout-btn:hover { background: rgba(231,76,60,0.5); }
-        .role-badge {
-            background: rgba(0,0,0,0.3);
-            color: #2ecc71;
-            padding: 3px 8px;
-            border-radius: 30px;
-            font-size: 0.65rem;
-            font-weight: 600;
-        }
-        .kpi-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            padding: 12px 24px;
-            background: var(--bg-dark);
-        }
-        .kpi-card {
-            background: var(--bg-card);
-            border-radius: 8px;
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .kpi-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 15px rgba(46,204,113,0.6); }
-        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .kpi-header span { font-size: 0.6rem; color: #a0a0a0; text-transform: uppercase; }
-        .kpi-value { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
-        .kpi-value.warning { color: #f39c12; }
-        .progress-bar { height: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 8px; }
-        .progress-fill { height: 100%; background: var(--primary); border-radius: 2px; }
-        .pill-group { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
-        .pill { padding: 2px 6px; border-radius: 15px; font-size: 0.55rem; font-weight: 500; }
-        .pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
-        .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
-        .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
-        .main-layout { display: flex; height: calc(100% - 60px); }
-        .sidebar { width: 420px; background: var(--bg-sidebar); overflow-y: auto; padding: 15px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
-        .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
-        .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .map-container { flex: 1; position: relative; }
-        #map { height: 100%; width: 100%; }
-        .charts-section {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(5px);
-            padding: 10px 15px 15px 15px;
-            margin: 10px;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            flex-shrink: 0;
-            max-height: 300px;
-            overflow: hidden;
-        }
-        .charts-section.collapsed {
-            max-height: 60px;
-            padding: 10px 15px;
-        }
-        .charts-section.collapsed .charts-grid {
-            display: none;
-        }
-        .charts-title {
-            font-size: 1rem;
-            font-weight: 700;
-            color: #1a1a1a;
-            text-align: center;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-        }
-        .toggle-charts-btn {
-            background: rgba(0,0,0,0.1);
-            border: none;
-            border-radius: 30px;
-            padding: 2px 12px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            color: #1a1a1a;
-            transition: 0.2s;
-        }
-        .toggle-charts-btn:hover {
-            background: rgba(0,0,0,0.2);
-        }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-top: 10px;
-        }
-        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 10px; padding: 10px; }
-        .chart-container h4 { text-align: center; margin-bottom: 8px; color: #1a1a1a; font-size: 0.7rem; }
-        canvas { max-height: 150px; width: 100%; }
-        .card {
-            background: rgba(42, 42, 42, 0.9);
-            backdrop-filter: blur(5px);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .card h3 { color: #2ecc71; margin-bottom: 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; }
-        input, select, textarea {
-            width: 100%;
-            padding: 8px;
-            margin: 6px 0;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            color: white;
-            font-size: 0.75rem;
-        }
-        button {
-            background: linear-gradient(135deg, #1a472a, #0d2a1a);
-            color: white;
-            padding: 8px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 6px;
-            font-size: 0.75rem;
-        }
-        .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
-        .reports-list { max-height: 250px; overflow-y: auto; }
-        .report-item {
-            background: #1a1a1a;
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 8px;
-            border-left: 3px solid #2ecc71;
-            cursor: pointer;
-            font-size: 0.7rem;
-        }
-        .report-item.severity-critical { border-left-color: #e74c3c; }
-        .report-item.severity-high { border-left-color: #f39c12; }
-        .damage-badge { display: inline-block; padding: 2px 6px; border-radius: 15px; font-size: 0.6rem; margin-left: 5px; }
-        .badge-minimal { background: rgba(46,204,113,0.2); color: #2ecc71; }
-        .badge-partial { background: rgba(243,156,18,0.2); color: #f39c12; }
-        .badge-complete { background: rgba(231,76,60,0.2); color: #e74c3c; }
-        .building-info {
-            background: rgba(46,204,113,0.1);
-            padding: 8px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 0.65rem;
-            text-align: center;
-            cursor: pointer;
-            border: 1px solid rgba(46,204,113,0.3);
-            color: #2ecc71;
-        }
-        .sms-card { background: rgba(46,204,113,0.08); padding: 8px; border-radius: 8px; margin-top: 8px; }
-        .photo-preview { margin-top: 8px; text-align: center; }
-        .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
-        .leaderboard-panel {
-            position: fixed;
-            bottom: 15px;
-            right: 15px;
-            width: 220px;
-            background: rgba(30,30,30,0.95);
-            backdrop-filter: blur(12px);
-            border-radius: 10px;
-            border: 1px solid rgba(243,156,18,0.2);
-            z-index: 1000;
-        }
-        .leaderboard-header {
-            padding: 8px;
-            border-radius: 10px 10px 0 0;
-            display: flex;
-            justify-content: space-between;
-            cursor: pointer;
-            font-size: 0.7rem;
-            font-weight: 600;
-            background: rgba(243,156,18,0.08);
-        }
-        .leaderboard-list { max-height: 140px; overflow-y: auto; padding: 6px; }
-        .leaderboard-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px;
-            border-radius: 6px;
-            margin: 3px 0;
-            background: rgba(255,255,255,0.03);
-            font-size: 0.65rem;
-            cursor: pointer;
-        }
-        .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
-        .rank { width: 25px; font-weight: 700; color: #f39c12; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes fadeInMsg { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @media (max-width: 1000px) {
-            .sidebar { width: 100%; max-height: 40vh; }
-            .right-panel { height: 60vh; }
+            .sidebar { width: 100%; max-height: 35vh; }
+            .right-panel { height: 65vh; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
-            .controls-right { gap: 6px; }
-            .sync-btn, .logout-btn { padding: 3px 6px; font-size: 0.6rem; }
-            .charts-section { max-height: 250px; }
+            .chat-panel { width: 280px !important; }
         }
         @media (max-width: 600px) {
-            .system-bar { flex-wrap: wrap; gap: 5px; }
+            .system-bar { flex-wrap: wrap; gap: 4px; }
             .brand-center { order: 1; width: 100%; }
             .controls-right { order: 2; justify-content: center; }
+            .chat-panel { width: 240px !important; left: 10px !important; bottom: 10px !important; }
         }
     </style>
 </head>
@@ -487,10 +863,10 @@ UNIFIED_DASHBOARD_HTML = """
             <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
             <option value="pt">🇵🇹 Português</option><option value="ar">🇸🇦 العربية</option><option value="zh">🇨🇳 中文</option>
         </select>
-        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
+        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:4px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <span id="headerExportGroup" style="display:none; gap:5px; align-items:center;">
+        <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
@@ -513,7 +889,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div class="main-layout">
         <div class="sidebar" id="sidebarPanel">
             <div class="card"><h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
-            <p id="clickHint" style="font-size:0.65rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
+            <p id="clickHint" style="font-size:0.55rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
             <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
             <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
             <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
@@ -525,14 +901,17 @@ UNIFIED_DASHBOARD_HTML = """
             <input type="text" id="textLocation" placeholder="Describe location"><textarea id="notes" rows="2" placeholder="Additional notes"></textarea>
             <input type="file" id="photo" accept="image/*" capture="environment"><div id="photoPreview" class="photo-preview"></div>
             <button id="submitBtn" onclick="submitReport()"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
-            <div id="submitStatus" style="margin-top:8px; font-size:0.65rem;"></div></div>
+            <div id="submitStatus" style="margin-top:4px; font-size:0.55rem;"></div></div>
             <div class="card"><h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
-            <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG (e.g., collapsed 28.6139 77.2090)">
-            <input type="text" id="smsNumber" placeholder="Your Phone Number (optional)">
+            <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG">
+            <input type="text" id="smsNumber" placeholder="Phone Number (optional)">
             <button onclick="sendSMSReport()"><i class="fas fa-envelope"></i> <span id="smsSendLabel">Send SMS Report</span></button></div>
-            <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
+            <div id="smsStatus" style="margin-top:4px; font-size:0.55rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
+            <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
+            <div style="display:flex; gap:6px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">CSV</span></button>
+            <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">GeoJSON</span></button></div></div>
         </div>
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
@@ -542,9 +921,9 @@ UNIFIED_DASHBOARD_HTML = """
                     <button class="toggle-charts-btn" id="toggleChartsBtn" title="Toggle charts visibility">▲</button>
                 </div>
                 <div class="charts-grid">
-                    <div class="chart-container"><h4>🥧 Damage Distribution (Pie)</h4><canvas id="pieChart"></canvas></div>
+                    <div class="chart-container"><h4>🥧 Damage Distribution</h4><canvas id="pieChart"></canvas></div>
                     <div class="chart-container"><h4>📊 Damage by Infrastructure</h4><canvas id="barChart"></canvas></div>
-                    <div class="chart-container"><h4>📈 Damage Trend (Line)</h4><canvas id="lineChart"></canvas></div>
+                    <div class="chart-container"><h4>📈 Damage Trend</h4><canvas id="lineChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -552,27 +931,27 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <div id="analyticsTab" class="tab-content">
-    <div style="padding:15px 20px; overflow-y:auto; height:100%;">
-        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:15px; margin-bottom:20px;">
-            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="totalReports" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Total Reports</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="totalUsers" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Active Users</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="avgResponse" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Avg Response (min)</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:12px; padding:15px;"><div class="stat-value" id="topReporter" style="font-size:1.8rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.7rem; color:#a0a0a0;">Top Reporter</div></div>
+    <div style="padding:10px 15px; overflow-y:auto; height:100%;">
+        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:15px;">
+            <div class="stat-card" style="background:#1e1e1e; border-radius:10px; padding:12px;"><div class="stat-value" id="totalReports" style="font-size:1.5rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Total Reports</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:10px; padding:12px;"><div class="stat-value" id="totalUsers" style="font-size:1.5rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Active Users</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:10px; padding:12px;"><div class="stat-value" id="avgResponse" style="font-size:1.5rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Avg Response (min)</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:10px; padding:12px;"><div class="stat-value" id="topReporter" style="font-size:1.5rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Top Reporter</div></div>
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(350px,1fr)); gap:15px;">
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px;"><h3 style="color:#2ecc71;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px; overflow-x:auto;"><h3 style="color:#2ecc71;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
-            <div style="background:#1e1e1e; border-radius:12px; padding:15px; overflow-x:auto;"><h3 style="color:#2ecc71;">👥 Users by Role</h3><table id="rolesTable" style="width:100%;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px;">
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px;"><h3 style="color:#2ecc71; font-size:0.8rem;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px;"><h3 style="color:#2ecc71; font-size:0.8rem;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px;"><h3 style="color:#2ecc71; font-size:0.8rem;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px;"><h3 style="color:#2ecc71; font-size:0.8rem;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.8rem;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%; font-size:0.7rem;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
+            <div style="background:#1e1e1e; border-radius:10px; padding:12px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.8rem;">👥 Users by Role</h3><table id="rolesTable" style="width:100%; font-size:0.7rem;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 </div>
 
 <div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
 
-<!-- CRISIS CHAT PANEL – LOCAL ONLY, NO WEBSOCKET -->
+<!-- LOCAL CHAT (NO WEBSOCKET) -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -586,11 +965,6 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <script>
-// ================================================================
-//  COMPLETE SCRIPT – NO WEBSOCKET, NO CONNECTION ATTEMPTS
-// ================================================================
-
-// Basic data and map logic (same as before, but we strip out all ws)
 let map, markers = [], reports = [];
 let currentUser = { username: '', role: '', avatar: '', color: '#2ecc71', points: 0, badge: '' };
 let currentLang = localStorage.getItem('language') || 'en';
@@ -649,8 +1023,8 @@ async function loadAdminStats() {
             type: 'bar', data: { labels: data.by_crisis.map(d=>d.crisis), datasets: [{ label:'Reports', data:data.by_crisis.map(d=>d.count), backgroundColor:'#3498db', borderRadius:8 }] },
             options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:8px;">${i+1}</td><td style="padding:8px;">${r.username}</td><td style="padding:8px;">${r.reports}</td>`).join('');
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:8px;">${r.role}</td><td style="padding:8px;">${r.count}</td>`).join('');
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:6px;">${i+1}</td><td style="padding:6px;">${r.username}</td><td style="padding:6px;">${r.reports}</td>`).join('');
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:6px;">${r.role}</td><td style="padding:6px;">${r.count}</td>`).join('');
     } catch(e) { console.error(e); }
 }
 
@@ -660,15 +1034,15 @@ function updateCommandCenterCharts() {
     if(pieChart) pieChart.destroy();
     pieChart = new Chart(document.getElementById('pieChart'), {
         type:'pie', data:{ labels:['Minimal','Partial','Complete'], datasets:[{ data:[damageCounts.minimal,damageCounts.partial,damageCounts.complete], backgroundColor:['#2ecc71','#f39c12','#e74c3c'] }] },
-        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10, weight:'bold' }, color:'#000' } } } }
+        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:8, weight:'bold' }, color:'#000' } } } }
     });
     const infraCounts = {}; for(let r of reports) { let t=r.infrastructure_type||'Unknown'; infraCounts[t]=(infraCounts[t]||0)+1; }
     const infraLabels = Object.keys(infraCounts).slice(0,6);
     const infraData = infraLabels.map(l=>infraCounts[l]);
     if(barChart) barChart.destroy();
     barChart = new Chart(document.getElementById('barChart'), {
-        type:'bar', data:{ labels:infraLabels, datasets:[{ label:'Reports', data:infraData, backgroundColor:'#3498db', borderRadius:8 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000' }, ticks:{ color:'#000' } }, x:{ ticks:{ color:'#000' } } }, plugins:{ legend:{ labels:{ color:'#000' } } } }
+        type:'bar', data:{ labels:infraLabels, datasets:[{ label:'Reports', data:infraData, backgroundColor:'#3498db', borderRadius:6 }] },
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:8} }, ticks:{ color:'#000', font:{size:8} } }, x:{ ticks:{ color:'#000', font:{size:8} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:8} } } } }
     });
     const dailyCounts = {}; for(let r of reports) { let d = new Date(r.timestamp).toISOString().split('T')[0]; dailyCounts[d]=(dailyCounts[d]||0)+1; }
     const last7Days = []; for(let i=6;i>=0;i--) { let d=new Date(); d.setDate(d.getDate()-i); last7Days.push(d.toISOString().split('T')[0]); }
@@ -676,7 +1050,7 @@ function updateCommandCenterCharts() {
     if(lineChart) lineChart.destroy();
     lineChart = new Chart(document.getElementById('lineChart'), {
         type:'line', data:{ labels:last7Days.map(d=>d.slice(5)), datasets:[{ label:'Reports per Day', data:lineData, borderColor:'#2ecc71', backgroundColor:'rgba(46,204,113,0.1)', fill:true, tension:0.4 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000' }, ticks:{ color:'#000' } }, x:{ ticks:{ color:'#000' } } }, plugins:{ legend:{ labels:{ color:'#000' } } } }
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:8} }, ticks:{ color:'#000', font:{size:8} } }, x:{ ticks:{ color:'#000', font:{size:8} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:8} } } } }
     });
 }
 
@@ -691,7 +1065,11 @@ function updateUITexts() {
     document.getElementById('smsTitle').innerText = translations.sms_report || 'SMS Report';
     document.getElementById('smsSendLabel').innerText = translations.sms_send || 'Send SMS Report';
     document.getElementById('recentTitle').innerText = translations.recent_reports || 'Recent Reports';
+    document.getElementById('exportTitle').innerText = translations.export_data || 'Export Data (Admin Only)';
+    document.getElementById('csvLabel').innerText = translations.export_csv || 'Export CSV';
+    document.getElementById('geojsonLabel').innerText = translations.export_geojson || 'Export GeoJSON';
     document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
+    document.getElementById('chatInput').placeholder = translations.type_message || 'Type a message...';
 }
 document.getElementById('languageSelect').value = currentLang;
 document.getElementById('languageSelect').addEventListener('change', (e) => setLanguage(e.target.value));
@@ -701,7 +1079,7 @@ function initMap() {
     map = L.map('map').setView([20, 0], 2);
     map.attributionControl.setPrefix('');
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19,
         minZoom: 1
@@ -754,7 +1132,7 @@ document.getElementById('photo').addEventListener('change', function(e) {
     let preview = document.getElementById('photoPreview');
     if(e.target.files && e.target.files[0]) {
         let reader = new FileReader();
-        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:80px;">`; };
+        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:60px;">`; };
         reader.readAsDataURL(e.target.files[0]);
     } else { preview.innerHTML = ''; }
 });
@@ -850,7 +1228,7 @@ function updateMapMarkers() {
             let color = '#2ecc71';
             if(r.damage_level==='partial') color='#f39c12';
             if(r.damage_level==='complete') color='#e74c3c';
-            let marker = L.circleMarker([r.lat,r.lng], { radius:8, fillColor:color, color:'#fff', weight:2, fillOpacity:0.8 }).addTo(map);
+            let marker = L.circleMarker([r.lat,r.lng], { radius:6, fillColor:color, color:'#fff', weight:2, fillOpacity:0.8 }).addTo(map);
             marker.bindPopup(`<b>${r.building_name||'Building'}</b><br>Damage: ${r.damage_level}<br>${new Date(r.timestamp).toLocaleString()}`);
             markers.push(marker);
         }
@@ -872,8 +1250,8 @@ function updateReportsList() {
 
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
-    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
-    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; statusDiv.className = 'status-badge'; }
+    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
 
 async function loadCurrentUser() {
@@ -882,20 +1260,9 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        
-        const exportGroup = document.getElementById('headerExportGroup');
-        if (user.role === 'admin' || user.role === 'reporter') {
-            exportGroup.style.display = 'inline-flex';
-        } else {
-            exportGroup.style.display = 'none';
-        }
-        
-        if(user.role === 'admin') {
-            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
-            isAdmin = true;
-        } else {
-            isAdmin = false;
-        }
+        if(user.role === 'admin') { document.getElementById('exportCard').style.display = 'block'; document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; isAdmin=true; }
+        else { document.getElementById('exportCard').style.display = 'none'; isAdmin=false; }
+        // No WebSocket - just load data
         loadReports();
         loadLeaderboard();
         loadStats();
@@ -927,9 +1294,9 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
-    let msg = 'Pending reports to sync:\\n';
-    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\\n`; });
-    msg += '\\nClick OK to sync now.';
+    let msg = 'Pending reports to sync:\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
+    msg += '\nClick OK to sync now.';
     if(confirm(msg)) forceSync();
 });
 
@@ -942,7 +1309,7 @@ if(urgentElement && urgentElement.parentElement && urgentElement.parentElement.p
         markers = [];
         for(let r of criticalReports) {
             if(r.lat && r.lng) {
-                let marker = L.circleMarker([r.lat, r.lng], { radius:10, fillColor:'#e74c3c', color:'#fff', weight:2, fillOpacity:0.9 }).addTo(map);
+                let marker = L.circleMarker([r.lat, r.lng], { radius:8, fillColor:'#e74c3c', color:'#fff', weight:2, fillOpacity:0.9 }).addTo(map);
                 marker.bindPopup(`<b>URGENT</b><br>${r.building_name || 'Building'}<br>Damage: ${r.damage_level}`);
                 markers.push(marker);
             }
@@ -957,13 +1324,16 @@ window.addEventListener('offline', () => { updateConnectionStatus(false); showTo
 updateConnectionStatus(navigator.onLine);
 initMap();
 loadCurrentUser();
+loadReports();
+loadLeaderboard();
+loadStats();
 setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  CHAT – LOCAL ONLY (no WebSocket, no errors)
+// CHAT - LOCAL ONLY (no WebSocket)
 // ================================================================
 function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
@@ -994,7 +1364,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ================================================================
-//  DRAGGABLE CHAT
+// DRAGGABLE CHAT
 // ================================================================
 (function initDragChat() {
     const container = document.getElementById('glowChat');
@@ -1034,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 // ================================================================
-//  TOGGLE CHARTS & SIDEBAR
+// TOGGLE CHARTS & SIDEBAR
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
     const toggleBtn = document.getElementById('toggleChartsBtn');
@@ -1061,3 +1431,16 @@ document.addEventListener('DOMContentLoaded', function() {
 </body>
 </html>
 """
+
+# ============================================
+# VERCEL SERVERLESS HANDLER
+# ============================================
+from mangum import Mangum
+handler = Mangum(app)
+
+# ============================================
+# LOCAL DEVELOPMENT
+# ============================================
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
