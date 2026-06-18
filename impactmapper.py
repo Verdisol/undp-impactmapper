@@ -239,11 +239,10 @@ def require_reporter(current_user: dict = Depends(verify_user)):
     return current_user
 
 # ============================================
-# LANGUAGES DICTIONARY (shortened for brevity – you can keep full)
+# LANGUAGES DICTIONARY (shortened for brevity)
 # ============================================
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
-    # Add other languages if needed (ES, FR, PT, AR, ZH) – but keep it short
 }
 
 # ============================================
@@ -421,7 +420,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML (full version with background, stats, partners)
+# LOGIN HTML (full version – unchanged)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -688,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – COMPACT HEADER + OSM MAP
+# UNIFIED DASHBOARD HTML – LARGER FONTS, BIGGER ICONS, OSM MAP
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -708,23 +707,23 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ---- COMPACT HEADER (HALF SIZE) ---- */
+        /* ---- COMPACT HEADER WITH LARGER FONT & ICONS ---- */
         .system-bar {
             background: #1a472a;
-            padding: 2px 12px !important;
+            padding: 4px 16px !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2ecc71;
-            min-height: 32px !important;  /* half of previous 64px */
-            height: 32px !important;
+            min-height: 40px !important;
+            height: 40px !important;
         }
-        .brand-center h1 { font-size: 0.85rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
-        .brand-center p { font-size: 0.45rem !important; color: rgba(255,255,255,0.7); margin-top: 0px; line-height: 1; }
-        .controls-right { gap: 3px !important; display: flex; align-items: center; flex-wrap: wrap; }
+        .brand-center h1 { font-size: 1.1rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
+        .brand-center p { font-size: 0.55rem !important; color: rgba(255,255,255,0.7); margin-top: 0px; line-height: 1; }
+        .controls-right { gap: 6px !important; display: flex; align-items: center; flex-wrap: wrap; }
         .controls-right .sync-btn, .controls-right .logout-btn { 
-            padding: 1px 4px !important; 
-            font-size: 0.5rem !important; 
+            padding: 3px 8px !important; 
+            font-size: 0.65rem !important; 
             background: rgba(255,255,255,0.15); 
             border: none; 
             border-radius: 4px; 
@@ -737,8 +736,8 @@ UNIFIED_DASHBOARD_HTML = """
         .controls-right .logout-btn { background: rgba(231,76,60,0.3); }
         .controls-right .logout-btn:hover { background: rgba(231,76,60,0.5); }
         .controls-right .lang-dropdown { 
-            padding: 1px 3px !important; 
-            font-size: 0.5rem !important; 
+            padding: 3px 6px !important; 
+            font-size: 0.65rem !important; 
             background: rgba(255,255,255,0.15); 
             color: white; 
             border: none; 
@@ -746,76 +745,81 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer; 
         }
         .controls-right .role-badge { 
-            font-size: 0.45rem !important; 
-            padding: 0px 4px !important; 
+            font-size: 0.6rem !important; 
+            padding: 2px 6px !important; 
             background: rgba(0,0,0,0.3); 
             color: #2ecc71; 
             border-radius: 30px; 
         }
         .status-badge { 
-            padding: 1px 5px; 
+            padding: 2px 8px; 
             border-radius: 30px; 
-            font-size: 0.5rem; 
+            font-size: 0.6rem; 
             font-weight: 500; 
             display: flex; 
             align-items: center; 
-            gap: 3px; 
+            gap: 4px; 
             background: rgba(0,0,0,0.3); 
         }
         .status-online { color: #2ecc71; }
 
+        /* ---- BIGGER ICONS (30% larger) ---- */
+        .fa, .fas, .far, .fal, .fab, .fa-solid, .fa-regular, .fa-light {
+            font-size: 1.3em !important;
+        }
+
         .tabs-container {
             background: var(--bg-card);
-            padding: 0 10px;
+            padding: 0 14px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
-            gap: 2px;
+            gap: 4px;
         }
         .tab-btn {
-            padding: 4px 12px;
+            padding: 8px 18px;
             background: transparent;
             color: #a0a0a0;
             border: none;
-            font-size: 0.65rem;
+            font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
         }
         .tab-btn:hover { color: var(--primary); background: var(--primary-muted); }
         .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
-        .tab-content { display: none; height: calc(100vh - 95px); }
+        .tab-content { display: none; height: calc(100vh - 105px); }
         .tab-content.active { display: block; }
 
         .kpi-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 4px;
-            padding: 4px 10px;
+            gap: 8px;
+            padding: 8px 14px;
             background: var(--bg-dark);
         }
         .kpi-card {
             background: var(--bg-card);
-            border-radius: 3px;
-            padding: 4px 6px;
+            border-radius: 6px;
+            padding: 8px 10px;
             border: 1px solid var(--border-color);
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .kpi-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 8px rgba(46,204,113,0.2); }
-        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px; }
-        .kpi-header span { font-size: 0.4rem; color: #a0a0a0; text-transform: uppercase; }
-        .kpi-value { font-size: 0.9rem; font-weight: 700; margin-bottom: 1px; }
+        .kpi-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 10px rgba(46,204,113,0.25); }
+        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+        .kpi-header span { font-size: 0.55rem; color: #a0a0a0; text-transform: uppercase; }
+        .kpi-value { font-size: 1.2rem; font-weight: 700; margin-bottom: 2px; }
         .kpi-value.warning { color: #f39c12; }
-        .progress-bar { height: 2px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 1px; }
+        .progress-bar { height: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
         .progress-fill { height: 100%; background: var(--primary); border-radius: 2px; }
-        .pill-group { display: flex; gap: 2px; margin-top: 1px; flex-wrap: wrap; }
-        .pill { padding: 0px 3px; border-radius: 8px; font-size: 0.4rem; font-weight: 500; }
+        .pill-group { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+        .pill { padding: 1px 5px; border-radius: 10px; font-size: 0.5rem; font-weight: 500; }
         .pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
         .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
 
-        .main-layout { display: flex; height: calc(100% - 40px); }
-        .sidebar { width: 300px; background: var(--bg-sidebar); overflow-y: auto; padding: 8px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
+        .main-layout { display: flex; height: calc(100% - 44px); }
+        .sidebar { width: 340px; background: var(--bg-sidebar); overflow-y: auto; padding: 12px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
         .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
         .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .map-container { flex: 1; position: relative; }
@@ -824,156 +828,157 @@ UNIFIED_DASHBOARD_HTML = """
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
-            border-radius: 4px;
-            padding: 6px;
-            margin-bottom: 6px;
-            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
         }
-        .card h3 { color: #2ecc71; margin-bottom: 4px; font-size: 0.6rem; display: flex; align-items: center; gap: 3px; }
+        .card h3 { color: #2ecc71; margin-bottom: 6px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px; }
         input, select, textarea {
             width: 100%;
-            padding: 3px;
-            margin: 2px 0;
+            padding: 5px;
+            margin: 3px 0;
             background: #1a1a1a;
             border: 1px solid #333;
-            border-radius: 3px;
+            border-radius: 4px;
             color: white;
-            font-size: 0.55rem;
+            font-size: 0.7rem;
         }
         button {
             background: linear-gradient(135deg, #1a472a, #0d2a1a);
             color: white;
-            padding: 4px;
+            padding: 6px;
             font-weight: 600;
             border: none;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
             width: 100%;
-            margin-top: 2px;
-            font-size: 0.55rem;
+            margin-top: 3px;
+            font-size: 0.7rem;
         }
         .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
-        .reports-list { max-height: 150px; overflow-y: auto; }
+        .reports-list { max-height: 200px; overflow-y: auto; }
         .report-item {
             background: #1a1a1a;
-            padding: 3px 5px;
-            margin: 2px 0;
-            border-radius: 3px;
+            padding: 5px 8px;
+            margin: 3px 0;
+            border-radius: 4px;
             border-left: 3px solid #2ecc71;
             cursor: pointer;
-            font-size: 0.5rem;
+            font-size: 0.65rem;
         }
         .report-item.severity-critical { border-left-color: #e74c3c; }
         .report-item.severity-high { border-left-color: #f39c12; }
         .building-info {
             background: rgba(46,204,113,0.1);
-            padding: 3px;
-            border-radius: 3px;
-            margin-top: 2px;
-            font-size: 0.5rem;
+            padding: 5px;
+            border-radius: 4px;
+            margin-top: 4px;
+            font-size: 0.65rem;
             text-align: center;
             cursor: pointer;
             border: 1px solid rgba(46,204,113,0.3);
             color: #2ecc71;
         }
-        .sms-card { background: rgba(46,204,113,0.08); padding: 3px; border-radius: 3px; margin-top: 2px; }
-        .photo-preview { margin-top: 2px; text-align: center; }
-        .photo-preview img { max-width: 100%; border-radius: 3px; max-height: 40px; }
+        .sms-card { background: rgba(46,204,113,0.08); padding: 5px; border-radius: 4px; margin-top: 4px; }
+        .photo-preview { margin-top: 4px; text-align: center; }
+        .photo-preview img { max-width: 100%; border-radius: 4px; max-height: 50px; }
+
         .leaderboard-panel {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
-            width: 160px;
+            bottom: 12px;
+            right: 12px;
+            width: 200px;
             background: rgba(30,30,30,0.95);
             backdrop-filter: blur(12px);
-            border-radius: 6px;
+            border-radius: 8px;
             border: 1px solid rgba(243,156,18,0.2);
             z-index: 1000;
         }
         .leaderboard-header {
-            padding: 3px 6px;
-            border-radius: 6px 6px 0 0;
+            padding: 5px 10px;
+            border-radius: 8px 8px 0 0;
             display: flex;
             justify-content: space-between;
             cursor: pointer;
-            font-size: 0.5rem;
+            font-size: 0.7rem;
             font-weight: 600;
             background: rgba(243,156,18,0.08);
         }
-        .leaderboard-list { max-height: 90px; overflow-y: auto; padding: 2px; }
+        .leaderboard-list { max-height: 120px; overflow-y: auto; padding: 4px; }
         .leaderboard-item {
             display: flex;
             align-items: center;
-            gap: 3px;
-            padding: 2px 3px;
+            gap: 5px;
+            padding: 3px 6px;
             border-radius: 3px;
             margin: 1px 0;
             background: rgba(255,255,255,0.02);
-            font-size: 0.5rem;
+            font-size: 0.65rem;
             cursor: pointer;
         }
         .leaderboard-item:hover { background: rgba(46,204,113,0.1); }
-        .rank { width: 16px; font-weight: 700; color: #f39c12; }
+        .rank { width: 20px; font-weight: 700; color: #f39c12; }
 
         .charts-section {
             background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(5px);
-            padding: 4px 8px 8px 8px;
-            margin: 3px 4px;
-            border-radius: 6px;
+            padding: 8px 12px 12px 12px;
+            margin: 6px 8px;
+            border-radius: 8px;
             transition: all 0.3s ease;
             flex-shrink: 0;
-            max-height: 160px;
+            max-height: 200px;
             overflow: hidden;
         }
         .charts-section.collapsed {
-            max-height: 28px;
-            padding: 3px 8px;
+            max-height: 36px;
+            padding: 6px 12px;
         }
         .charts-section.collapsed .charts-grid { display: none; }
         .charts-title {
-            font-size: 0.6rem;
+            font-size: 0.85rem;
             font-weight: 700;
             color: #1a1a1a;
             text-align: center;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
         }
         .toggle-charts-btn {
             background: rgba(0,0,0,0.06);
             border: none;
             border-radius: 20px;
-            padding: 0px 6px;
+            padding: 0px 10px;
             cursor: pointer;
-            font-size: 0.5rem;
+            font-size: 0.7rem;
             color: #1a1a1a;
         }
         .toggle-charts-btn:hover { background: rgba(0,0,0,0.12); }
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-            margin-top: 3px;
+            gap: 10px;
+            margin-top: 6px;
         }
-        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 4px; padding: 4px; }
-        .chart-container h4 { text-align: center; margin-bottom: 2px; color: #1a1a1a; font-size: 0.5rem; }
-        canvas { max-height: 80px; width: 100%; }
+        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 8px; }
+        .chart-container h4 { text-align: center; margin-bottom: 4px; color: #1a1a1a; font-size: 0.65rem; }
+        canvas { max-height: 100px; width: 100%; }
 
         /* GLOWING CHAT - LOCAL ONLY */
         .chat-panel {
             position: fixed !important;
             bottom: 15px !important;
             left: 15px !important;
-            width: 280px !important;
-            min-width: 160px !important;
-            max-width: 400px !important;
-            max-height: 350px !important;
-            min-height: 140px !important;
+            width: 320px !important;
+            min-width: 200px !important;
+            max-width: 450px !important;
+            max-height: 400px !important;
+            min-height: 180px !important;
             background: rgba(18, 25, 40, 0.95) !important;
             backdrop-filter: blur(12px) !important;
-            border-radius: 14px !important;
+            border-radius: 16px !important;
             border: 1px solid rgba(0, 255, 200, 0.25) !important;
             box-shadow: 0 0 20px rgba(0, 255, 200, 0.12), 0 0 40px rgba(0, 255, 200, 0.06) !important;
             animation: pulseGlowChat 2.8s ease-in-out infinite alternate !important;
@@ -990,10 +995,10 @@ UNIFIED_DASHBOARD_HTML = """
             100% { box-shadow: 0 0 30px rgba(0,255,200,0.25), 0 0 60px rgba(0,255,200,0.1); }
         }
         .chat-header {
-            padding: 4px 10px !important;
+            padding: 6px 14px !important;
             background: rgba(0,255,200,0.06) !important;
             border-bottom: 1px solid rgba(0,255,200,0.08) !important;
-            border-radius: 14px 14px 0 0 !important;
+            border-radius: 16px 16px 0 0 !important;
             cursor: grab !important;
             display: flex !important;
             justify-content: space-between !important;
@@ -1003,17 +1008,17 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-header:active { cursor: grabbing !important; }
         .chat-header h4 {
             color: #00ffcc !important;
-            font-size: 0.6rem !important;
+            font-size: 0.8rem !important;
             font-weight: 700 !important;
             letter-spacing: 0.5px !important;
             display: flex !important;
             align-items: center !important;
-            gap: 5px !important;
+            gap: 6px !important;
         }
         .chat-header .pulse-dot {
             display: inline-block !important;
-            width: 5px !important;
-            height: 5px !important;
+            width: 6px !important;
+            height: 6px !important;
             background: #00ffcc !important;
             border-radius: 50% !important;
             box-shadow: 0 0 10px #00ffcc !important;
@@ -1021,32 +1026,32 @@ UNIFIED_DASHBOARD_HTML = """
         }
         @keyframes blinkDotChat { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
         .chat-header .status-badge {
-            font-size: 0.45rem !important;
+            font-size: 0.6rem !important;
             background: rgba(0,255,200,0.1) !important;
-            padding: 0px 6px !important;
+            padding: 1px 8px !important;
             border-radius: 30px !important;
             color: #aaffee !important;
             border: 1px solid rgba(0,255,200,0.08) !important;
         }
         .chat-messages {
             flex: 1 !important;
-            padding: 4px 8px !important;
+            padding: 6px 10px !important;
             overflow-y: auto !important;
-            max-height: 190px !important;
-            min-height: 60px !important;
+            max-height: 220px !important;
+            min-height: 80px !important;
             display: flex !important;
             flex-direction: column !important;
-            gap: 2px !important;
+            gap: 3px !important;
             background: transparent !important;
         }
         .chat-messages::-webkit-scrollbar { width: 3px; }
         .chat-messages::-webkit-scrollbar-thumb { background: #00ffcc; border-radius: 10px; }
         .chat-message {
-            padding: 3px 6px !important;
-            border-radius: 8px !important;
+            padding: 4px 10px !important;
+            border-radius: 10px !important;
             max-width: 85% !important;
-            font-size: 0.55rem !important;
-            line-height: 1.2 !important;
+            font-size: 0.7rem !important;
+            line-height: 1.3 !important;
         }
         .chat-message.own {
             align-self: flex-end !important;
@@ -1062,36 +1067,36 @@ UNIFIED_DASHBOARD_HTML = """
             color: #cdd9e6 !important;
             border-bottom-left-radius: 2px !important;
         }
-        .chat-message .msg-username { font-weight: 700 !important; color: #00ffcc !important; font-size: 0.5rem !important; display: block !important; margin-bottom: 0px !important; }
-        .chat-message .msg-time { font-size: 0.4rem !important; opacity: 0.4 !important; margin-left: 3px !important; }
+        .chat-message .msg-username { font-weight: 700 !important; color: #00ffcc !important; font-size: 0.6rem !important; display: block !important; margin-bottom: 1px !important; }
+        .chat-message .msg-time { font-size: 0.5rem !important; opacity: 0.4 !important; margin-left: 4px !important; }
         .chat-input-area {
-            padding: 3px 8px 6px 8px !important;
+            padding: 4px 10px 8px 10px !important;
             border-top: 1px solid rgba(0,255,200,0.06) !important;
             display: flex !important;
-            gap: 3px !important;
+            gap: 4px !important;
             align-items: center !important;
             flex-shrink: 0 !important;
             background: transparent !important;
         }
         .chat-input-area input {
             flex: 1 !important;
-            padding: 3px 6px !important;
+            padding: 4px 10px !important;
             border-radius: 30px !important;
             border: 1px solid rgba(0,255,200,0.08) !important;
             background: rgba(0,0,0,0.35) !important;
             color: #fff !important;
-            font-size: 0.55rem !important;
+            font-size: 0.65rem !important;
             outline: none !important;
         }
         .chat-input-area input:focus { border-color: #00ffcc !important; box-shadow: 0 0 12px rgba(0,255,200,0.06) !important; }
         .chat-input-area button {
-            padding: 3px 10px !important;
+            padding: 4px 14px !important;
             border-radius: 30px !important;
             border: none !important;
             background: #00ffcc !important;
             color: #0b0e14 !important;
             font-weight: 700 !important;
-            font-size: 0.5rem !important;
+            font-size: 0.6rem !important;
             cursor: pointer !important;
             box-shadow: 0 0 12px rgba(0,255,200,0.08) !important;
             transition: 0.2s !important;
@@ -1100,20 +1105,20 @@ UNIFIED_DASHBOARD_HTML = """
             margin: 0 !important;
         }
         .chat-input-area button:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,255,200,0.15); }
-        .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 14px 0; opacity: 0.15; }
+        .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 16px 0; opacity: 0.15; }
 
         @media (max-width: 1000px) {
             .sidebar { width: 100%; max-height: 30vh; }
             .right-panel { height: 70vh; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
-            .chat-panel { width: 240px !important; }
+            .chat-panel { width: 280px !important; }
         }
         @media (max-width: 600px) {
-            .system-bar { flex-wrap: wrap; gap: 2px; height: auto !important; min-height: 28px !important; }
+            .system-bar { flex-wrap: wrap; gap: 2px; height: auto !important; min-height: 34px !important; }
             .brand-center { order: 1; width: 100%; }
             .controls-right { order: 2; justify-content: center; }
-            .chat-panel { width: 200px !important; left: 10px !important; bottom: 10px !important; }
+            .chat-panel { width: 240px !important; left: 10px !important; bottom: 10px !important; }
         }
     </style>
 </head>
@@ -1126,10 +1131,10 @@ UNIFIED_DASHBOARD_HTML = """
             <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
             <option value="pt">🇵🇹 Português</option><option value="ar">🇸🇦 العربية</option><option value="zh">🇨🇳 中文</option>
         </select>
-        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:3px;"></i> Online</div>
+        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:4px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <span id="headerExportGroup" style="display:none; gap:2px; align-items:center;">
+        <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
@@ -1152,7 +1157,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div class="main-layout">
         <div class="sidebar" id="sidebarPanel">
             <div class="card"><h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
-            <p id="clickHint" style="font-size:0.45rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
+            <p id="clickHint" style="font-size:0.6rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
             <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
             <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
             <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
@@ -1164,16 +1169,16 @@ UNIFIED_DASHBOARD_HTML = """
             <input type="text" id="textLocation" placeholder="Describe location"><textarea id="notes" rows="2" placeholder="Additional notes"></textarea>
             <input type="file" id="photo" accept="image/*" capture="environment"><div id="photoPreview" class="photo-preview"></div>
             <button id="submitBtn" onclick="submitReport()"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
-            <div id="submitStatus" style="margin-top:2px; font-size:0.45rem;"></div></div>
+            <div id="submitStatus" style="margin-top:4px; font-size:0.6rem;"></div></div>
             <div class="card"><h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
             <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG">
             <input type="text" id="smsNumber" placeholder="Phone Number (optional)">
             <button onclick="sendSMSReport()"><i class="fas fa-envelope"></i> <span id="smsSendLabel">Send SMS Report</span></button></div>
-            <div id="smsStatus" style="margin-top:2px; font-size:0.45rem;"></div></div>
+            <div id="smsStatus" style="margin-top:4px; font-size:0.6rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
             <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
-            <div style="display:flex; gap:3px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">CSV</span></button>
+            <div style="display:flex; gap:4px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">CSV</span></button>
             <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">GeoJSON</span></button></div></div>
         </div>
         <div class="right-panel">
@@ -1194,20 +1199,20 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <div id="analyticsTab" class="tab-content">
-    <div style="padding:6px 10px; overflow-y:auto; height:100%;">
-        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; margin-bottom:6px;">
-            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="totalReports" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Total Reports</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="totalUsers" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Active Users</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="avgResponse" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Avg Response (min)</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="topReporter" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Top Reporter</div></div>
+    <div style="padding:8px 14px; overflow-y:auto; height:100%;">
+        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; margin-bottom:8px;">
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:10px;"><div class="stat-value" id="totalReports" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Total Reports</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:10px;"><div class="stat-value" id="totalUsers" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Active Users</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:10px;"><div class="stat-value" id="avgResponse" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Avg Response (min)</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:10px;"><div class="stat-value" id="topReporter" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.6rem; color:#a0a0a0;">Top Reporter</div></div>
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:6px;">
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%; font-size:0.55rem;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
-            <div style="background:#1e1e1e; border-radius:6px; padding:8px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.6rem;">👥 Users by Role</h3><table id="rolesTable" style="width:100%; font-size:0.55rem;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px;">
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.75rem;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.75rem;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.75rem;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.75rem;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.75rem;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%; font-size:0.65rem;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:10px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.75rem;">👥 Users by Role</h3><table id="rolesTable" style="width:100%; font-size:0.65rem;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 </div>
@@ -1286,8 +1291,8 @@ async function loadAdminStats() {
             type: 'bar', data: { labels: data.by_crisis.map(d=>d.crisis), datasets: [{ label:'Reports', data:data.by_crisis.map(d=>d.count), backgroundColor:'#3498db', borderRadius:8 }] },
             options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:3px;">${i+1}</td><td style="padding:3px;">${r.username}</td><td style="padding:3px;">${r.reports}</td>`).join('');
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:3px;">${r.role}</td><td style="padding:3px;">${r.count}</td>`).join('');
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:4px;">${i+1}</td><td style="padding:4px;">${r.username}</td><td style="padding:4px;">${r.reports}</td>`).join('');
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:4px;">${r.role}</td><td style="padding:4px;">${r.count}</td>`).join('');
     } catch(e) { console.error(e); }
 }
 
@@ -1297,7 +1302,7 @@ function updateCommandCenterCharts() {
     if(pieChart) pieChart.destroy();
     pieChart = new Chart(document.getElementById('pieChart'), {
         type:'pie', data:{ labels:['Minimal','Partial','Complete'], datasets:[{ data:[damageCounts.minimal,damageCounts.partial,damageCounts.complete], backgroundColor:['#2ecc71','#f39c12','#e74c3c'] }] },
-        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:7, weight:'bold' }, color:'#000' } } } }
+        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:8, weight:'bold' }, color:'#000' } } } }
     });
     const infraCounts = {}; for(let r of reports) { let t=r.infrastructure_type||'Unknown'; infraCounts[t]=(infraCounts[t]||0)+1; }
     const infraLabels = Object.keys(infraCounts).slice(0,6);
@@ -1305,7 +1310,7 @@ function updateCommandCenterCharts() {
     if(barChart) barChart.destroy();
     barChart = new Chart(document.getElementById('barChart'), {
         type:'bar', data:{ labels:infraLabels, datasets:[{ label:'Reports', data:infraData, backgroundColor:'#3498db', borderRadius:4 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:7} }, ticks:{ color:'#000', font:{size:7} } }, x:{ ticks:{ color:'#000', font:{size:7} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:7} } } } }
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:8} }, ticks:{ color:'#000', font:{size:8} } }, x:{ ticks:{ color:'#000', font:{size:8} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:8} } } } }
     });
     const dailyCounts = {}; for(let r of reports) { let d = new Date(r.timestamp).toISOString().split('T')[0]; dailyCounts[d]=(dailyCounts[d]||0)+1; }
     const last7Days = []; for(let i=6;i>=0;i--) { let d=new Date(); d.setDate(d.getDate()-i); last7Days.push(d.toISOString().split('T')[0]); }
@@ -1313,7 +1318,7 @@ function updateCommandCenterCharts() {
     if(lineChart) lineChart.destroy();
     lineChart = new Chart(document.getElementById('lineChart'), {
         type:'line', data:{ labels:last7Days.map(d=>d.slice(5)), datasets:[{ label:'Reports per Day', data:lineData, borderColor:'#2ecc71', backgroundColor:'rgba(46,204,113,0.1)', fill:true, tension:0.4 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:7} }, ticks:{ color:'#000', font:{size:7} } }, x:{ ticks:{ color:'#000', font:{size:7} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:7} } } } }
+        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:8} }, ticks:{ color:'#000', font:{size:8} } }, x:{ ticks:{ color:'#000', font:{size:8} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:8} } } } }
     });
 }
 
@@ -1394,7 +1399,7 @@ document.getElementById('photo').addEventListener('change', function(e) {
     let preview = document.getElementById('photoPreview');
     if(e.target.files && e.target.files[0]) {
         let reader = new FileReader();
-        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:40px;">`; };
+        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:50px;">`; };
         reader.readAsDataURL(e.target.files[0]);
     } else { preview.innerHTML = ''; }
 });
@@ -1490,7 +1495,7 @@ function updateMapMarkers() {
             let color = '#2ecc71';
             if(r.damage_level==='partial') color='#f39c12';
             if(r.damage_level==='complete') color='#e74c3c';
-            let marker = L.circleMarker([r.lat,r.lng], { radius:5, fillColor:color, color:'#fff', weight:1.5, fillOpacity:0.8 }).addTo(map);
+            let marker = L.circleMarker([r.lat,r.lng], { radius:6, fillColor:color, color:'#fff', weight:1.5, fillOpacity:0.8 }).addTo(map);
             marker.bindPopup(`<b>${r.building_name||'Building'}</b><br>Damage: ${r.damage_level}<br>${new Date(r.timestamp).toLocaleString()}`);
             markers.push(marker);
         }
@@ -1512,8 +1517,8 @@ function updateReportsList() {
 
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
-    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:3px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
-    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:3px;"></i> Offline'; statusDiv.className = 'status-badge'; }
+    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
 
 async function loadCurrentUser() {
@@ -1570,7 +1575,7 @@ if(urgentElement && urgentElement.parentElement && urgentElement.parentElement.p
         markers = [];
         for(let r of criticalReports) {
             if(r.lat && r.lng) {
-                let marker = L.circleMarker([r.lat, r.lng], { radius:7, fillColor:'#e74c3c', color:'#fff', weight:1.5, fillOpacity:0.9 }).addTo(map);
+                let marker = L.circleMarker([r.lat, r.lng], { radius:8, fillColor:'#e74c3c', color:'#fff', weight:1.5, fillOpacity:0.9 }).addTo(map);
                 marker.bindPopup(`<b>URGENT</b><br>${r.building_name || 'Building'}<br>Damage: ${r.damage_level}`);
                 markers.push(marker);
             }
