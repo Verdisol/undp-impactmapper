@@ -776,7 +776,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (FIXED CSS & CHARTS)
+# UNIFIED DASHBOARD HTML (FIXED SCROLL & FONTS)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1034,6 +1034,7 @@ UNIFIED_DASHBOARD_HTML = """
             background: #1a1a1a;
         }
 
+        /* ===== SIDEBAR FONT INCREASE ===== */
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
@@ -1042,7 +1043,17 @@ UNIFIED_DASHBOARD_HTML = """
             margin-bottom: 12px;
             border: 1px solid rgba(255,255,255,0.08);
         }
-        .card h3 { color: #2ecc71; margin-bottom: 8px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
+        .card h3 {
+            color: #2ecc71;
+            margin-bottom: 8px;
+            font-size: 0.95rem !important;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .card label, .card p, .card .building-info, .card .sms-card, .card .reports-list {
+            font-size: 0.85rem !important;
+        }
         input, select, textarea {
             width: 100%;
             padding: 8px;
@@ -1051,7 +1062,7 @@ UNIFIED_DASHBOARD_HTML = """
             border: 1px solid #333;
             border-radius: 6px;
             color: white;
-            font-size: 0.75rem;
+            font-size: 0.85rem !important;
         }
         button {
             background: linear-gradient(135deg, #1a472a, #0d2a1a);
@@ -1063,33 +1074,38 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             width: 100%;
             margin-top: 4px;
-            font-size: 0.75rem;
+            font-size: 0.85rem !important;
         }
         .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
         .reports-list { max-height: 220px; overflow-y: auto; }
         .report-item {
             background: #1a1a1a;
-            padding: 6px 10px;
-            margin: 4px 0;
+            padding: 8px 10px;
+            margin: 6px 0;
             border-radius: 6px;
             border-left: 3px solid #2ecc71;
             cursor: pointer;
-            font-size: 0.7rem;
+            font-size: 0.8rem !important;
         }
         .report-item.severity-critical { border-left-color: #e74c3c; }
         .report-item.severity-high { border-left-color: #f39c12; }
         .building-info {
             background: rgba(46,204,113,0.1);
-            padding: 6px;
+            padding: 8px;
             border-radius: 6px;
             margin-top: 4px;
-            font-size: 0.7rem;
+            font-size: 0.8rem !important;
             text-align: center;
             cursor: pointer;
             border: 1px solid rgba(46,204,113,0.3);
             color: #2ecc71;
         }
-        .sms-card { background: rgba(46,204,113,0.08); padding: 6px; border-radius: 6px; margin-top: 4px; }
+        .sms-card {
+            background: rgba(46,204,113,0.08);
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 4px;
+        }
         .photo-preview { margin-top: 4px; text-align: center; }
         .photo-preview img { max-width: 100%; border-radius: 6px; max-height: 60px; }
 
@@ -1325,12 +1341,12 @@ UNIFIED_DASHBOARD_HTML = """
             margin-bottom: 6px !important;
         }
         #exportCard h3 {
-            font-size: 0.6rem !important;
+            font-size: 0.8rem !important;
             margin-bottom: 4px !important;
         }
         #exportCard button {
-            font-size: 0.55rem !important;
-            padding: 3px 6px !important;
+            font-size: 0.75rem !important;
+            padding: 6px 8px !important;
             margin-top: 2px !important;
         }
 
@@ -1427,7 +1443,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div class="main-layout">
         <div class="sidebar" id="sidebarPanel">
             <div class="card"><h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
-            <p id="clickHint" style="font-size:0.65rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
+            <p id="clickHint" style="font-size:0.8rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
             <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
             <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
             <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
@@ -1439,12 +1455,12 @@ UNIFIED_DASHBOARD_HTML = """
             <input type="text" id="textLocation" placeholder="Describe location"><textarea id="notes" rows="2" placeholder="Additional notes"></textarea>
             <input type="file" id="photo" accept="image/*" capture="environment"><div id="photoPreview" class="photo-preview"></div>
             <button id="submitBtn" onclick="submitReport()"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
-            <div id="submitStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
+            <div id="submitStatus" style="margin-top:6px; font-size:0.8rem;"></div></div>
             <div class="card"><h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
             <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG">
             <input type="text" id="smsNumber" placeholder="Phone Number (optional)">
             <button onclick="sendSMSReport()"><i class="fas fa-envelope"></i> <span id="smsSendLabel">Send SMS Report</span></button></div>
-            <div id="smsStatus" style="margin-top:6px; font-size:0.65rem;"></div></div>
+            <div id="smsStatus" style="margin-top:6px; font-size:0.8rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
             <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
