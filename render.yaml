@@ -2,7 +2,7 @@ services:
   - type: web
     name: impactmapper
     runtime: python
-    buildCommand: pip install fastapi uvicorn asyncpg python-multipart
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn impactmapper:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
