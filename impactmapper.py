@@ -216,19 +216,24 @@ async def get_stats_db():
         await conn.close()
 
 # ============================================
-# ADMIN STATS FOR ANALYTICS DASHBOARD
+# ADMIN STATS FOR ANALYTICS DASHBOARD (FIXED)
 # ============================================
 async def get_admin_stats(days: int = 30):
     await init_db_once()
     conn = await get_db_conn()
     try:
+        # FIX: Cast TEXT timestamp to TIMESTAMP so date operations work
         date_filter = ""
         if days > 0:
-            cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-            date_filter = f"AND timestamp >= '{cutoff}'"
+            date_filter = f"AND timestamp::timestamp >= (NOW() - INTERVAL '{days} days')"
 
-        total_reports = await conn.fetchval(f"SELECT COUNT(*) FROM reports WHERE is_current = 1 {date_filter}")
-        total_users = await conn.fetchval(f"SELECT COUNT(DISTINCT username) FROM reports WHERE is_current = 1 {date_filter}")
+        total_reports = await conn.fetchval(f"""
+            SELECT COUNT(*) FROM reports WHERE is_current = 1 {date_filter}
+        """)
+
+        total_users = await conn.fetchval(f"""
+            SELECT COUNT(DISTINCT username) FROM reports WHERE is_current = 1 {date_filter}
+        """)
 
         top_reporters = await conn.fetch(f"""
             SELECT username, COUNT(*) as reports
@@ -241,10 +246,10 @@ async def get_admin_stats(days: int = 30):
 
         days_limit = min(days, 30) if days > 0 else 30
         daily_trend = await conn.fetch(f"""
-            SELECT DATE(timestamp) as date, COUNT(*) as count
+            SELECT DATE(timestamp::timestamp) as date, COUNT(*) as count
             FROM reports
-            WHERE is_current = 1 AND timestamp >= (NOW() - INTERVAL '{days_limit} days')
-            GROUP BY DATE(timestamp)
+            WHERE is_current = 1 AND timestamp::timestamp >= (NOW() - INTERVAL '{days_limit} days')
+            GROUP BY DATE(timestamp::timestamp)
             ORDER BY date ASC
         """)
 
@@ -282,8 +287,8 @@ async def get_admin_stats(days: int = 30):
         """)
 
         return {
-            "total_reports": total_reports,
-            "total_users": total_users,
+            "total_reports": total_reports or 0,
+            "total_users": total_users or 0,
             "avg_response_minutes": 0,
             "top_reporters": [{"username": r[0], "reports": r[1]} for r in top_reporters],
             "daily_trend": [{"date": r[0].isoformat(), "count": r[1]} for r in daily_trend],
@@ -504,7 +509,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML (truncated for brevity – but it's the same as before)
+# LOGIN HTML
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -771,7 +776,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – (same as the full version you had, but I'm placing it as a variable)
+# UNIFIED DASHBOARD HTML (FIXED FRONTEND)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1520,11 +1525,14 @@ function switchTab(tab) {
     }
 }
 
+// ============================================================
+// FIXED: Admin stats loader with proper "No Data" handling
+// ============================================================
 async function loadAdminStats() {
     const days = document.getElementById('analyticsDays').value;
     try {
         const res = await fetch(`/api/admin/stats?days=${days}`);
-        if (!res.ok) throw new Error('API error');
+        if (!res.ok) throw new Error('API error: ' + res.status);
         const data = await res.json();
         console.log('Analytics data:', data);
 
@@ -1533,9 +1541,10 @@ async function loadAdminStats() {
         document.getElementById('avgResponse').innerHTML = data.avg_response_minutes || 'N/A';
         document.getElementById('topReporter').innerHTML = data.top_reporters[0]?.username || '-';
 
-        const destroyChart = (chart) => { if (chart) { chart.destroy(); } };
+        const safeDestroy = (chart) => { if (chart) { chart.destroy(); } };
 
-        destroyChart(trendChart);
+        // --- Trend Chart ---
+        safeDestroy(trendChart);
         const trendLabels = data.daily_trend.map(d => d.date.slice(5));
         const trendData = data.daily_trend.map(d => d.count);
         trendChart = new Chart(document.getElementById('trendChart'), {
@@ -1559,7 +1568,8 @@ async function loadAdminStats() {
             }
         });
 
-        destroyChart(damageChart);
+        // --- Damage Distribution ---
+        safeDestroy(damageChart);
         const damageLabels = data.by_damage.map(d => d.level);
         const damageData = data.by_damage.map(d => d.count);
         damageChart = new Chart(document.getElementById('damageChart'), {
@@ -1577,7 +1587,8 @@ async function loadAdminStats() {
             }
         });
 
-        destroyChart(infraChart);
+        // --- Infrastructure Chart ---
+        safeDestroy(infraChart);
         const infraLabels = data.by_infrastructure.map(d => d.type);
         const infraData = data.by_infrastructure.map(d => d.count);
         infraChart = new Chart(document.getElementById('infraChart'), {
@@ -1599,7 +1610,8 @@ async function loadAdminStats() {
             }
         });
 
-        destroyChart(crisisChart);
+        // --- Crisis Chart ---
+        safeDestroy(crisisChart);
         const crisisLabels = data.by_crisis.map(d => d.crisis);
         const crisisData = data.by_crisis.map(d => d.count);
         crisisChart = new Chart(document.getElementById('crisisChart'), {
@@ -1621,12 +1633,15 @@ async function loadAdminStats() {
             }
         });
 
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i) =>
-            `<tr><td style="padding:6px;">${i+1}</td><td style="padding:6px;">${r.username}</td><td style="padding:6px;">${r.reports}</td></tr>`
-        ).join('') || '<tr><td colspan="3" style="text-align:center;color:#666;">No data</td></tr>';
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r =>
-            `<tr><td style="padding:6px;">${r.role}</td><td style="padding:6px;">${r.count}</td></tr>`
-        ).join('') || '<tr><td colspan="2" style="text-align:center;color:#666;">No data</td></tr>';
+        // Tables
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML =
+            data.top_reporters.map((r,i) =>
+                `<tr><td style="padding:6px;">${i+1}</td><td style="padding:6px;">${r.username}</td><td style="padding:6px;">${r.reports}</td></tr>`
+            ).join('') || '<tr><td colspan="3" style="text-align:center;color:#666;">No data</td></tr>';
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML =
+            data.users_by_role.map(r =>
+                `<tr><td style="padding:6px;">${r.role}</td><td style="padding:6px;">${r.count}</td></tr>`
+            ).join('') || '<tr><td colspan="2" style="text-align:center;color:#666;">No data</td></tr>';
 
     } catch(e) {
         console.error('Error loading analytics:', e);
