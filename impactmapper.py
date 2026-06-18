@@ -538,7 +538,6 @@ UNIFIED_DASHBOARD_HTML = """
         </div>
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
-            <!-- Collapsible Analytics Charts -->
             <div class="charts-section" id="chartsSection">
                 <div class="charts-title">
                     📊 DAMAGE ANALYTICS DASHBOARD
@@ -576,7 +575,7 @@ UNIFIED_DASHBOARD_HTML = """
 <!-- LEADERBOARD PANEL (REST only) -->
 <div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
 
-<!-- CRISIS CHAT PANEL (no WebSocket – local-only messaging) -->
+<!-- CRISIS CHAT PANEL – NO WEBSOCKET, LOCAL ONLY -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -962,10 +961,8 @@ setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  CHAT – LOCAL ONLY (no WebSocket)
+//  CHAT – LOCAL ONLY (no WebSocket, no connection attempts)
 // ================================================================
-let chatMessages = [];
-
 function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
     if (!container) return;
@@ -983,11 +980,8 @@ function sendLocalChatMessage() {
     if (!text) return;
     addChatMessage('You', text, true);
     input.value = '';
-    // Optionally store in localStorage for persistence
-    chatMessages.push({ username: 'You', message: text, time: new Date().toISOString(), own: true });
 }
 
-// Bind chat events
 document.addEventListener('DOMContentLoaded', function() {
     const sendBtn = document.getElementById('chatSendBtn');
     const input = document.getElementById('chatInput');
