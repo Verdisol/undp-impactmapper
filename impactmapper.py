@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 64px HEADER + OSM MAP
+# UNIFIED DASHBOARD HTML – 64px HEADER, OSM MAP, GLOWING BUTTONS
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -721,47 +721,69 @@ UNIFIED_DASHBOARD_HTML = """
         .brand-center h1 { font-size: 1.4rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
         .brand-center p { font-size: 0.65rem !important; color: rgba(255,255,255,0.7); margin-top: 2px; line-height: 1; }
         .controls-right { gap: 10px !important; display: flex; align-items: center; flex-wrap: wrap; }
-        .controls-right .sync-btn, .controls-right .logout-btn { 
-            padding: 6px 12px !important; 
-            font-size: 0.75rem !important; 
-            background: rgba(255,255,255,0.15); 
-            border: none; 
-            border-radius: 6px; 
-            color: white; 
-            cursor: pointer; 
-            transition: all 0.2s ease; 
-            white-space: nowrap; 
+
+        /* ---- GLOWING BUTTONS ---- */
+        .sync-btn, .logout-btn {
+            padding: 6px 12px !important;
+            font-size: 0.75rem !important;
+            background: rgba(255,255,255,0.1) !important;
+            border: none !important;
+            border-radius: 6px !important;
+            color: white !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            white-space: nowrap !important;
+            box-shadow: 0 0 5px rgba(0,255,200,0.2) !important;
         }
-        .controls-right .sync-btn:hover { background: rgba(255,255,255,0.25); }
-        .controls-right .logout-btn { background: rgba(231,76,60,0.3); }
-        .controls-right .logout-btn:hover { background: rgba(231,76,60,0.5); }
-        .controls-right .lang-dropdown { 
-            padding: 6px 10px !important; 
-            font-size: 0.75rem !important; 
-            background: rgba(255,255,255,0.15); 
-            color: white; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
+        .sync-btn:hover, .logout-btn:hover {
+            background: rgba(0,255,200,0.2) !important;
+            box-shadow: 0 0 15px rgba(0,255,200,0.6), 0 0 30px rgba(0,255,200,0.2) !important;
+            transform: scale(1.02);
         }
-        .controls-right .role-badge { 
-            font-size: 0.7rem !important; 
-            padding: 4px 8px !important; 
-            background: rgba(0,0,0,0.3); 
-            color: #2ecc71; 
-            border-radius: 30px; 
+        .logout-btn { background: rgba(231,76,60,0.3) !important; box-shadow: 0 0 5px rgba(231,76,60,0.3) !important; }
+        .logout-btn:hover { background: rgba(231,76,60,0.5) !important; box-shadow: 0 0 15px rgba(231,76,60,0.6), 0 0 30px rgba(231,76,60,0.2) !important; }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(46,204,113,0.2);
+            transition: all 0.3s ease;
         }
-        .status-badge { 
-            padding: 4px 10px; 
-            border-radius: 30px; 
-            font-size: 0.7rem; 
-            font-weight: 500; 
-            display: flex; 
-            align-items: center; 
-            gap: 5px; 
-            background: rgba(0,0,0,0.3); 
+        .status-online {
+            color: #2ecc71;
+            box-shadow: 0 0 10px rgba(46,204,113,0.3), 0 0 20px rgba(46,204,113,0.1);
+            animation: glowPulse 2s infinite alternate;
         }
-        .status-online { color: #2ecc71; }
+        @keyframes glowPulse {
+            0% { box-shadow: 0 0 5px rgba(46,204,113,0.2), 0 0 10px rgba(46,204,113,0.1); }
+            100% { box-shadow: 0 0 15px rgba(46,204,113,0.6), 0 0 30px rgba(46,204,113,0.2); }
+        }
+
+        .lang-dropdown {
+            padding: 6px 10px !important;
+            font-size: 0.75rem !important;
+            background: rgba(255,255,255,0.1) !important;
+            color: white !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+        }
+        .lang-dropdown:hover { background: rgba(255,255,255,0.2) !important; }
+
+        .role-badge {
+            font-size: 0.7rem !important;
+            padding: 4px 8px !important;
+            background: rgba(0,0,0,0.3);
+            color: #2ecc71;
+            border-radius: 30px;
+        }
 
         /* ---- BIGGER ICONS (30% larger) ---- */
         .fa, .fas, .far, .fal, .fab, .fa-solid, .fa-regular, .fa-light {
@@ -1518,8 +1540,13 @@ function updateReportsList() {
 
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
-    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
-    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; statusDiv.className = 'status-badge'; }
+    if(isOnline) { 
+        statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; 
+        statusDiv.className = 'status-badge status-online'; 
+    } else { 
+        statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; 
+        statusDiv.className = 'status-badge'; 
+    }
 }
 
 async function loadCurrentUser() {
