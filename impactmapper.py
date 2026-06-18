@@ -420,7 +420,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML
+# LOGIN HTML (full version)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
