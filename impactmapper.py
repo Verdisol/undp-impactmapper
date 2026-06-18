@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – with OSM basemap fixed
+# UNIFIED DASHBOARD HTML – with header customized
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -707,87 +707,103 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ---- HEADER 64px ---- */
+        /* ---- HEADER 64px (customized) ---- */
         .system-bar {
             background: #1a472a;
-            padding: 8px 20px !important;
+            padding: 6px 16px !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2ecc71;
-            min-height: 64px !important;
-            height: 64px !important;
+            min-height: 56px !important;
+            height: 56px !important;
         }
-        .brand-center h1 { font-size: 1.4rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
-        .brand-center p { font-size: 0.65rem !important; color: rgba(255,255,255,0.7); margin-top: 2px; line-height: 1; }
-        .controls-right { gap: 10px !important; display: flex; align-items: center; flex-wrap: wrap; }
-
-        /* ---- GLOWING BUTTONS ---- */
-        .sync-btn, .logout-btn {
-            padding: 6px 12px !important;
-            font-size: 0.75rem !important;
-            background: rgba(255,255,255,0.1) !important;
-            border: none !important;
-            border-radius: 6px !important;
-            color: white !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            white-space: nowrap !important;
-            box-shadow: 0 0 5px rgba(0,255,200,0.2) !important;
+        .brand-center {
+            flex: 1;
+            text-align: center;
         }
-        .sync-btn:hover, .logout-btn:hover {
-            background: rgba(0,255,200,0.2) !important;
-            box-shadow: 0 0 15px rgba(0,255,200,0.6), 0 0 30px rgba(0,255,200,0.2) !important;
-            transform: scale(1.02);
+        .brand-center h1 {
+            font-size: 1.2rem !important;
+            font-weight: 700;
+            color: white;
+            letter-spacing: 0.5px;
+            margin: 0;
+            line-height: 1.2;
         }
-        .logout-btn { background: rgba(231,76,60,0.3) !important; box-shadow: 0 0 5px rgba(231,76,60,0.3) !important; }
-        .logout-btn:hover { background: rgba(231,76,60,0.5) !important; box-shadow: 0 0 15px rgba(231,76,60,0.6), 0 0 30px rgba(231,76,60,0.2) !important; }
-
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 30px;
-            font-size: 0.7rem;
-            font-weight: 500;
+        .brand-center h1 span { color: #2ecc71; }
+        .brand-center p {
+            font-size: 0.6rem !important;
+            color: rgba(255,255,255,0.75);
+            margin-top: 0px;
+            line-height: 1.2;
+        }
+        .controls-right {
             display: flex;
             align-items: center;
-            gap: 5px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(46,204,113,0.2);
-            transition: all 0.3s ease;
-        }
-        .status-online {
-            color: #2ecc71;
-            box-shadow: 0 0 10px rgba(46,204,113,0.3), 0 0 20px rgba(46,204,113,0.1);
-            animation: glowPulse 2s infinite alternate;
-        }
-        @keyframes glowPulse {
-            0% { box-shadow: 0 0 5px rgba(46,204,113,0.2), 0 0 10px rgba(46,204,113,0.1); }
-            100% { box-shadow: 0 0 15px rgba(46,204,113,0.6), 0 0 30px rgba(46,204,113,0.2); }
+            gap: 6px !important;
+            flex-wrap: nowrap;
         }
 
-        .lang-dropdown {
-            padding: 6px 10px !important;
-            font-size: 0.75rem !important;
-            background: rgba(255,255,255,0.1) !important;
-            color: white !important;
-            border: 1px solid rgba(255,255,255,0.15) !important;
-            border-radius: 6px !important;
+        /* ---- REDUCED, BLACK BOLD CONTROLS ---- */
+        .sync-btn, .logout-btn, .lang-dropdown, .status-badge, .role-badge {
+            font-size: 0.65rem !important;
+            padding: 3px 8px !important;
+            border-radius: 4px !important;
+            font-weight: 700 !important;
+            color: #000 !important;
+            background: rgba(255,255,255,0.85) !important;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+            box-shadow: none !important;
+            transition: 0.2s ease !important;
+            white-space: nowrap !important;
             cursor: pointer !important;
-            transition: all 0.3s ease !important;
+            text-decoration: none !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
         }
-        .lang-dropdown:hover { background: rgba(255,255,255,0.2) !important; }
-
+        .sync-btn:hover, .logout-btn:hover, .lang-dropdown:hover, .status-badge:hover, .role-badge:hover {
+            background: #fff !important;
+            transform: scale(1.02);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        }
+        .logout-btn {
+            background: rgba(255, 200, 200, 0.9) !important;
+            color: #b00000 !important;
+        }
+        .logout-btn:hover {
+            background: #fff !important;
+            color: #d00 !important;
+        }
+        .status-badge {
+            background: rgba(200,255,200,0.85) !important;
+            color: #000 !important;
+        }
+        .status-badge i {
+            font-size: 6px !important;
+            color: #2ecc71 !important;
+        }
+        .lang-dropdown {
+            background: rgba(255,255,255,0.85) !important;
+            color: #000 !important;
+            border: 1px solid #ccc !important;
+            padding: 2px 6px !important;
+            font-size: 0.6rem !important;
+        }
         .role-badge {
-            font-size: 0.7rem !important;
-            padding: 4px 8px !important;
-            background: rgba(0,0,0,0.3);
-            color: #2ecc71;
-            border-radius: 30px;
+            background: rgba(255,255,200,0.85) !important;
+            color: #000 !important;
         }
 
-        /* ---- BIGGER ICONS (30% larger) ---- */
-        .fa, .fas, .far, .fal, .fab, .fa-solid, .fa-regular, .fa-light {
-            font-size: 1.3em !important;
+        /* override icon sizes inside these controls */
+        .sync-btn i, .logout-btn i, .status-badge i, .role-badge i {
+            font-size: 0.8em !important;
+        }
+
+        /* remove glowing animation from status badge – we keep it simple */
+        .status-online {
+            animation: none !important;
+            box-shadow: none !important;
         }
 
         .tabs-container {
@@ -845,7 +861,7 @@ UNIFIED_DASHBOARD_HTML = """
         .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
         .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .map-container { flex: 1; position: relative; }
-        #map { height: 100%; width: 100%; min-height: 300px; background: #1a1a1a; }  /* FIXED */
+        #map { height: 100%; width: 100%; min-height: 300px; background: #1a1a1a; }
 
         .card {
             background: rgba(42, 42, 42, 0.9);
@@ -1135,11 +1151,12 @@ UNIFIED_DASHBOARD_HTML = """
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
             .chat-panel { width: 300px !important; }
+            .controls-right { flex-wrap: wrap; justify-content: flex-end; }
         }
         @media (max-width: 600px) {
             .system-bar { flex-wrap: wrap; gap: 4px; height: auto !important; min-height: 56px !important; }
             .brand-center { order: 1; width: 100%; }
-            .controls-right { order: 2; justify-content: center; }
+            .controls-right { order: 2; justify-content: center; flex-wrap: wrap; }
             .chat-panel { width: 260px !important; left: 10px !important; bottom: 10px !important; }
         }
     </style>
@@ -1147,16 +1164,23 @@ UNIFIED_DASHBOARD_HTML = """
 <body>
 <div class="system-bar">
     <div class="brand-left"></div>
-    <div class="brand-center"><h1>🌍 UNDP <span>ImpactMapper</span></h1><p>Command Center | Live Intelligence</p></div>
+    <div class="brand-center">
+        <h1>🌍 UNDP <span>ImpactMapper</span></h1>
+        <p>Command Center | Live Intelligence</p>
+    </div>
     <div class="controls-right">
         <select id="languageSelect" class="lang-dropdown">
-            <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
-            <option value="pt">🇵🇹 Português</option><option value="ar">🇸🇦 العربية</option><option value="zh">🇨🇳 中文</option>
+            <option value="en">🇬🇧 EN</option>
+            <option value="es">🇪🇸 ES</option>
+            <option value="fr">🇫🇷 FR</option>
+            <option value="pt">🇵🇹 PT</option>
+            <option value="ar">🇸🇦 AR</option>
+            <option value="zh">🇨🇳 中文</option>
         </select>
-        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
+        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <span id="headerExportGroup" style="display:none; gap:6px; align-items:center;">
+        <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
@@ -1597,10 +1621,10 @@ function updateReportsList() {
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
     if(isOnline) { 
-        statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Online'; 
+        statusDiv.innerHTML = '<i class="fas fa-circle"></i> Online'; 
         statusDiv.className = 'status-badge status-online'; 
     } else { 
-        statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:5px;"></i> Offline'; 
+        statusDiv.innerHTML = '<i class="fas fa-circle"></i> Offline'; 
         statusDiv.className = 'status-badge'; 
     }
 }
