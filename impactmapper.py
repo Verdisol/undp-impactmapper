@@ -1,5 +1,16 @@
-UNIFIED_DASHBOARD_HTML = """
-<!DOCTYPE html>
+from flask import Flask, request, jsonify, render_template_string, send_file
+import json
+import io
+import csv
+from datetime import datetime
+import uuid
+
+app = Flask(__name__)
+
+# -------------------------------------------------------------------
+# YOUR UNIFIED DASHBOARD HTML (exactly as you had)
+# -------------------------------------------------------------------
+UNIFIED_DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1057,5 +1068,278 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 </body>
-</html>
-"""
+</html>"""
+
+# -------------------------------------------------------------------
+# In‑memory data store (replace with a real DB in production)
+# -------------------------------------------------------------------
+reports_store = []
+user_store = {
+    "username": "admin",
+    "role": "admin",
+    "points": 150,
+    "badge": "gold"
+}
+
+# -------------------------------------------------------------------
+# Routes
+# -------------------------------------------------------------------
+
+@app.route('/')
+def index():
+    """Serve the dashboard HTML."""
+    return render_template_string(UNIFIED_DASHBOARD_HTML)
+
+@app.route('/api/reports', methods=['GET'])
+def get_reports():
+    """Return all reports."""
+    return jsonify(reports_store)
+
+@app.route('/api/report', methods=['POST'])
+def submit_report():
+    """Accept a new report (multipart/form-data)."""
+    data = {
+        "id": str(uuid.uuid4()),
+        "damage_level": request.form.get('damage_level', 'minimal'),
+        "infrastructure_type": request.form.get('infrastructure_type', 'unknown'),
+        "building_name": request.form.get('building_name', ''),
+        "crisis_nature": request.form.get('crisis_nature', ''),
+        "debris": request.form.get('debris', 'no'),
+        "text_location": request.form.get('text_location', ''),
+        "lat": float(request.form.get('lat', 0)) if request.form.get('lat') else None,
+        "lng": float(request.form.get('lng', 0)) if request.form.get('lng') else None,
+        "notes": request.form.get('notes', ''),
+        "timestamp": datetime.utcnow().isoformat(),
+        "is_offline": False
+    }
+    # Handle photo upload (optional)
+    photo = request.files.get('photo')
+    if photo:
+        # For demo, we ignore the file; you could save it to cloud storage.
+        pass
+    reports_store.append(data)
+    return jsonify({"status": "success", "id": data["id"]})
+
+@app.route('/api/sync', methods=['POST'])
+def sync_offline():
+    """Bulk upload offline reports."""
+    offline_reports = request.get_json()
+    if not isinstance(offline_reports, list):
+        return jsonify({"status": "error", "message": "Expected a list"}), 400
+    for rep in offline_reports:
+        rep["id"] = str(uuid.uuid4())
+        rep["timestamp"] = rep.get("timestamp", datetime.utcnow().isoformat())
+        rep["is_offline"] = False
+        reports_store.append(rep)
+    return jsonify({"status": "success", "count": len(offline_reports)})
+
+@app.route('/api/current_user', methods=['GET'])
+def current_user():
+    """Return the logged‑in user (mock)."""
+    return jsonify(user_store)
+
+@app.route('/api/leaderboard', methods=['GET'])
+def leaderboard():
+    """Return a mock leaderboard."""
+    # Generate fake users with points
+    users = [
+        {"username": "alice", "points": 320},
+        {"username": "bob", "points": 280},
+        {"username": "charlie", "points": 210},
+        {"username": "diana", "points": 190},
+        {"username": "eve", "points": 150},
+    ]
+    return jsonify(users)
+
+@app.route('/api/stats', methods=['GET'])
+def stats():
+    """Return simple stats."""
+    return jsonify({
+        "total_reports": len(reports_store),
+        "today_reports": len([r for r in reports_store if r["timestamp"].startswith(datetime.utcnow().date().isoformat())]),
+        "pending_sync": 0
+    })
+
+@app.route('/api/admin/stats', methods=['GET'])
+def admin_stats():
+    """Return detailed stats for the admin dashboard."""
+    # Aggregate by damage
+    by_damage = {}
+    by_infrastructure = {}
+    by_crisis = {}
+    daily_trend = {}
+    for r in reports_store:
+        dmg = r.get('damage_level', 'unknown')
+        by_damage[dmg] = by_damage.get(dmg, 0) + 1
+        infra = r.get('infrastructure_type', 'unknown')
+        by_infrastructure[infra] = by_infrastructure.get(infra, 0) + 1
+        crisis = r.get('crisis_nature', 'unknown')
+        by_crisis[crisis] = by_crisis.get(crisis, 0) + 1
+        date = r['timestamp'][:10]
+        daily_trend[date] = daily_trend.get(date, 0) + 1
+
+    # Prepare for Chart.js
+    damage_list = [{"level": k, "count": v} for k, v in by_damage.items()]
+    infra_list = [{"type": k, "count": v} for k, v in by_infrastructure.items()]
+    crisis_list = [{"crisis": k, "count": v} for k, v in by_crisis.items()]
+    trend_list = [{"date": d, "count": daily_trend[d]} for d in sorted(daily_trend.keys())[-7:]]
+
+    top_reporters = [
+        {"username": "alice", "reports": 12},
+        {"username": "bob", "reports": 9}
+    ]
+    users_by_role = [
+        {"role": "admin", "count": 1},
+        {"role": "volunteer", "count": 5}
+    ]
+    return jsonify({
+        "total_reports": len(reports_store),
+        "total_users": 6,
+        "avg_response_minutes": 4.2,
+        "by_damage": damage_list,
+        "by_infrastructure": infra_list,
+        "by_crisis": crisis_list,
+        "daily_trend": trend_list,
+        "top_reporters": top_reporters,
+        "users_by_role": users_by_role
+    })
+
+@app.route('/api/reports/csv', methods=['GET'])
+def export_csv():
+    """Export reports as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "damage_level", "infrastructure_type", "building_name",
+                     "crisis_nature", "debris", "lat", "lng", "timestamp"])
+    for r in reports_store:
+        writer.writerow([
+            r.get("id", ""),
+            r.get("damage_level", ""),
+            r.get("infrastructure_type", ""),
+            r.get("building_name", ""),
+            r.get("crisis_nature", ""),
+            r.get("debris", ""),
+            r.get("lat", ""),
+            r.get("lng", ""),
+            r.get("timestamp", "")
+        ])
+    output.seek(0)
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='reports.csv'
+    )
+
+@app.route('/api/reports/geojson', methods=['GET'])
+def export_geojson():
+    """Export reports as GeoJSON."""
+    features = []
+    for r in reports_store:
+        if r.get('lat') and r.get('lng'):
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [r["lng"], r["lat"]]
+                },
+                "properties": {
+                    "id": r.get("id"),
+                    "damage_level": r.get("damage_level"),
+                    "building_name": r.get("building_name"),
+                    "crisis_nature": r.get("crisis_nature"),
+                    "timestamp": r.get("timestamp")
+                }
+            })
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    return jsonify(geojson)
+
+@app.route('/api/building/<float:lat>/<float:lng>', methods=['GET'])
+def get_building(lat, lng):
+    """Mock building lookup – returns dummy data."""
+    # In a real implementation, you would query OSM or a DB.
+    return jsonify({
+        "name": f"Building at {lat:.4f}, {lng:.4f}",
+        "address": "123 Example Street"
+    })
+
+@app.route('/api/sms_report', methods=['POST'])
+def sms_report():
+    """Simulate an SMS report."""
+    sms_text = request.form.get('sms_text', '')
+    sms_number = request.form.get('sms_number', '')
+    # Parse simple format: DAMAGE LAT LNG
+    parts = sms_text.split()
+    if len(parts) >= 3:
+        damage_level = parts[0].lower()
+        try:
+            lat = float(parts[1])
+            lng = float(parts[2])
+        except ValueError:
+            return jsonify({"status": "error", "message": "Invalid coordinates"})
+        # Create a report
+        reports_store.append({
+            "id": str(uuid.uuid4()),
+            "damage_level": damage_level if damage_level in ["minimal", "partial", "complete"] else "minimal",
+            "lat": lat,
+            "lng": lng,
+            "timestamp": datetime.utcnow().isoformat(),
+            "infrastructure_type": "unknown",
+            "building_name": "",
+            "crisis_nature": "",
+            "debris": "no",
+            "text_location": sms_text,
+            "notes": f"SMS from {sms_number}" if sms_number else "SMS report",
+            "is_offline": False
+        })
+        return jsonify({"status": "success", "message": "SMS report processed"})
+    else:
+        return jsonify({"status": "error", "message": "Format: DAMAGE LAT LNG"})
+
+@app.route('/api/lang/<lang>', methods=['GET'])
+def get_language(lang):
+    """Return translations for the given language (mock)."""
+    # English fallback; you could load from JSON files
+    translations = {
+        "en": {
+            "report_damage": "Report Damage",
+            "gps_location": "Use My GPS",
+            "submit": "Submit Report",
+            "sms_report": "SMS Report",
+            "sms_send": "Send SMS Report",
+            "recent_reports": "Recent Reports",
+            "export_data": "Export Data (Admin Only)",
+            "export_csv": "Export CSV",
+            "export_geojson": "Export GeoJSON",
+            "click_building": "🏢 Click on any building on the map to select it!",
+            "type_message": "Type a message..."
+        },
+        "es": {
+            "report_damage": "Reportar Daño",
+            "gps_location": "Usar mi GPS",
+            "submit": "Enviar Reporte",
+            "sms_report": "Reporte por SMS",
+            "sms_send": "Enviar SMS",
+            "recent_reports": "Reportes Recientes",
+            "export_data": "Exportar Datos (Solo Admin)",
+            "export_csv": "Exportar CSV",
+            "export_geojson": "Exportar GeoJSON",
+            "click_building": "🏢 ¡Haz clic en un edificio en el mapa para seleccionarlo!",
+            "type_message": "Escribe un mensaje..."
+        }
+        # Add more languages as needed
+    }
+    return jsonify(translations.get(lang, translations["en"]))
+
+# -------------------------------------------------------------------
+# This is the callable Vercel looks for
+# -------------------------------------------------------------------
+# 'app' is already defined above.
+# For Vercel, no extra code needed – just make sure 'app' is top‑level.
+# -------------------------------------------------------------------
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
