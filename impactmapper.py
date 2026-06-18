@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – header height increased to 75px
+# UNIFIED DASHBOARD HTML – with green border around KPI cards
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -710,7 +710,7 @@ UNIFIED_DASHBOARD_HTML = """
         /* ---- HEADER with increased width and height 75px ---- */
         .system-bar {
             background: #1a472a;
-            padding: 6px 40px !important;   /* increased horizontal padding */
+            padding: 6px 40px !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -723,7 +723,7 @@ UNIFIED_DASHBOARD_HTML = """
             text-align: center;
         }
         .brand-center h1 {
-            font-size: 1.4rem !important;   /* slightly larger for 75px height */
+            font-size: 1.4rem !important;
             font-weight: 700;
             color: white;
             letter-spacing: 0.5px;
@@ -732,7 +732,7 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .brand-center h1 span { color: #2ecc71; }
         .brand-center p {
-            font-size: 0.75rem !important;   /* larger to fill height */
+            font-size: 0.75rem !important;
             color: rgba(255,255,255,0.75);
             margin-top: 2px;
             line-height: 1.2;
@@ -856,15 +856,20 @@ UNIFIED_DASHBOARD_HTML = """
             padding: 12px 20px;
             background: var(--bg-dark);
         }
+        /* ---- GREEN BORDER AROUND KPI CARDS ---- */
         .kpi-card {
             background: var(--bg-card);
             border-radius: 8px;
             padding: 12px 16px;
-            border: 1px solid var(--border-color);
+            border: 2px solid #2ecc71;  /* solid green boundary */
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .kpi-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 0 15px rgba(46,204,113,0.25); }
+        .kpi-card:hover {
+            border-color: #27ae60;  /* slightly darker green on hover */
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px rgba(46,204,113,0.3);
+        }
         .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         .kpi-header span { font-size: 0.6rem; color: #a0a0a0; text-transform: uppercase; }
         .kpi-value { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
