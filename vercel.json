@@ -1,4 +1,8 @@
 {
-  "builds": [{ "src": "impactmapper.py", "use": "@vercel/python" }],
+  "functions": {
+    "impactmapper.py": {
+      "runtime": "python3.9"
+    }
+  },
   "routes": [{ "src": "/(.*)", "dest": "impactmapper.py" }]
 }
