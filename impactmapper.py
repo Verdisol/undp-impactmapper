@@ -4,7 +4,7 @@ UNIFIED_DASHBOARD_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNDP ImpactMapper - Analytics Command Center</title>
+    <title>UNDP ImpactMapper - Command Center</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,7 +28,7 @@ UNIFIED_DASHBOARD_HTML = """
             --info: #3498db;
         }
 
-        /* ----- GLOWING + DRAGGABLE CHAT OVERRIDES ----- */
+        /* ----- GLOWING + DRAGGABLE CHAT (no WebSocket) ----- */
         .chat-panel {
             position: fixed !important;
             bottom: 20px !important;
@@ -427,16 +427,18 @@ UNIFIED_DASHBOARD_HTML = """
         .sms-card { background: rgba(46,204,113,0.08); padding: 8px; border-radius: 8px; margin-top: 8px; }
         .photo-preview { margin-top: 8px; text-align: center; }
         .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
-        .presence-panel, .leaderboard-panel {
+        .leaderboard-panel {
             position: fixed;
+            bottom: 15px;
+            right: 15px;
+            width: 220px;
             background: rgba(30,30,30,0.95);
             backdrop-filter: blur(12px);
             border-radius: 10px;
+            border: 1px solid rgba(243,156,18,0.2);
             z-index: 1000;
         }
-        .presence-panel { bottom: 15px; right: 15px; width: 220px; border: 1px solid rgba(46,204,113,0.2); }
-        .leaderboard-panel { bottom: 15px; right: 250px; width: 200px; border: 1px solid rgba(243,156,18,0.2); }
-        .presence-header, .leaderboard-header {
+        .leaderboard-header {
             padding: 8px;
             border-radius: 10px 10px 0 0;
             display: flex;
@@ -444,11 +446,10 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             font-size: 0.7rem;
             font-weight: 600;
+            background: rgba(243,156,18,0.08);
         }
-        .presence-header { background: rgba(46,204,113,0.08); }
-        .leaderboard-header { background: rgba(243,156,18,0.08); }
-        .presence-list, .leaderboard-list { max-height: 140px; overflow-y: auto; padding: 6px; }
-        .presence-user, .leaderboard-item {
+        .leaderboard-list { max-height: 140px; overflow-y: auto; padding: 6px; }
+        .leaderboard-item {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -459,16 +460,13 @@ UNIFIED_DASHBOARD_HTML = """
             font-size: 0.65rem;
             cursor: pointer;
         }
-        .presence-user:hover, .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
-        .online-dot { width: 6px; height: 6px; border-radius: 50%; background: #2ecc71; margin-left: auto; animation: pulse 2s infinite; }
+        .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
         .rank { width: 25px; font-weight: 700; color: #f39c12; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
         @media (max-width: 1000px) {
             .sidebar { width: 100%; max-height: 40vh; }
             .right-panel { height: 60vh; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
-            .leaderboard-panel { right: 230px; }
             .controls-right { gap: 6px; }
             .sync-btn, .logout-btn { padding: 3px 6px; font-size: 0.6rem; }
             .charts-section { max-height: 250px; }
@@ -483,7 +481,7 @@ UNIFIED_DASHBOARD_HTML = """
 <body>
 <div class="system-bar">
     <div class="brand-left"></div>
-    <div class="brand-center"><h1>🌍 UNDP <span>ImpactMapper</span></h1><p>Analytics Command Center | Live Intelligence</p></div>
+    <div class="brand-center"><h1>🌍 UNDP <span>ImpactMapper</span></h1><p>Command Center | Live Intelligence</p></div>
     <div class="controls-right">
         <select id="languageSelect" class="lang-dropdown">
             <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
@@ -492,12 +490,12 @@ UNIFIED_DASHBOARD_HTML = """
         <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <!-- EXPORT BUTTONS IN HEADER (before logout) -->
+        <!-- EXPORT BUTTONS -->
         <span id="headerExportGroup" style="display:none; gap:5px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
-        <!-- TOGGLE SIDEBAR BUTTON -->
+        <!-- TOGGLE SIDEBAR -->
         <button class="sync-btn" id="toggleSidebarBtn" title="Toggle Command Panel"><i class="fas fa-chevron-left"></i></button>
         <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
@@ -575,43 +573,35 @@ UNIFIED_DASHBOARD_HTML = """
     </div>
 </div>
 
-<div class="presence-panel"><div class="presence-header" onclick="togglePresence()"><span><i class="fas fa-users"></i> Active Users</span><span id="presenceCount">0</span></div><div id="presenceList" class="presence-list"></div></div>
+<!-- LEADERBOARD PANEL (REST only) -->
+<div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
 
-<!-- GLOWING + DRAGGABLE CHAT PANEL (no initial message) -->
+<!-- CRISIS CHAT PANEL (no WebSocket – local-only messaging) -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
-        <div class="status-badge">● Live</div>
+        <div class="status-badge">● Local</div>
     </div>
-    <div id="chatMessages" class="chat-messages">
-        <!-- No system messages – starts empty -->
-    </div>
+    <div id="chatMessages" class="chat-messages"></div>
     <div class="chat-input-area">
         <input type="text" id="chatInput" placeholder="Type a message…" autocomplete="off">
         <button id="chatSendBtn">Send</button>
     </div>
 </div>
 
-<div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
-
 <script>
-let map, markers = [], reports = [], contributorMarkers = [];
-let deviceId = localStorage.getItem('device_id');
+let map, markers = [], reports = [];
 let currentUser = { username: '', role: '', avatar: '', color: '#2ecc71', points: 0, badge: '' };
-let ws = null;
-let selectedBuilding = null;
-let currentMarker = null;
 let currentLang = localStorage.getItem('language') || 'en';
 let translations = {};
 let offlineQueue = [];
-let currentTileLayer = null;
 let isAdmin = false;
 let pieChart, barChart, lineChart, damageChart, trendChart, infraChart, crisisChart;
+let currentMarker = null;
 
 function loadOfflineQueue() { const saved = localStorage.getItem('offline_reports'); if (saved) offlineQueue = JSON.parse(saved); updateOfflineUI(); }
 function saveOfflineQueue() { localStorage.setItem('offline_reports', JSON.stringify(offlineQueue)); updateOfflineUI(); }
 function updateOfflineUI() { document.getElementById('pendingTasks').innerHTML = offlineQueue.length; }
-if (!deviceId) { deviceId = 'web_' + Date.now(); localStorage.setItem('device_id', deviceId); }
 loadOfflineQueue();
 
 function switchTab(tab) {
@@ -701,7 +691,6 @@ function updateUITexts() {
     document.getElementById('smsSendLabel').innerText = translations.sms_send || 'Send SMS Report';
     document.getElementById('recentTitle').innerText = translations.recent_reports || 'Recent Reports';
     document.getElementById('clickHint').innerHTML = translations.click_building || '🏢 Click on any building on the map to select it!';
-    document.getElementById('chatInput').placeholder = translations.type_message || 'Type a message...';
 }
 document.getElementById('languageSelect').value = currentLang;
 document.getElementById('languageSelect').addEventListener('change', (e) => setLanguage(e.target.value));
@@ -893,7 +882,6 @@ async function loadCurrentUser() {
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
         
-        // Show export buttons in header only for admin and reporter
         const exportGroup = document.getElementById('headerExportGroup');
         if (user.role === 'admin' || user.role === 'reporter') {
             exportGroup.style.display = 'inline-flex';
@@ -907,73 +895,11 @@ async function loadCurrentUser() {
         } else {
             isAdmin = false;
         }
-        connectWebSocket();
+        loadReports();
+        loadLeaderboard();
+        loadStats();
     } catch(e) { console.error('Auth error',e); }
 }
-
-function connectWebSocket() {
-    if(ws && ws.readyState === WebSocket.OPEN) return;
-    let protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    let wsUrl = `${protocol}://${window.location.host}/ws/${currentUser.username}`;
-    ws = new WebSocket(wsUrl);
-    ws.onopen = () => { console.log('WebSocket connected'); if(window.wsPingInterval) clearInterval(window.wsPingInterval); window.wsPingInterval = setInterval(() => { if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'})); }, 30000); };
-    ws.onmessage = (event) => {
-        try {
-            let data = JSON.parse(event.data);
-            if(data.type === 'presence') updatePresence(data.users, data.count);
-            else if(data.type === 'live_contributors') updateLiveContributors(data.contributors);
-            else if(data.type === 'chat') addChatMessage(data.data);
-            else if(data.type === 'new_report') loadReports();
-            else if(data.type === 'pong') { /* keep alive */ }
-        } catch(e) { console.error(e); }
-    };
-    ws.onclose = () => { console.log('WebSocket closed, reconnecting...'); setTimeout(connectWebSocket,3000); };
-    ws.onerror = (error) => { console.error('WebSocket error',error); ws.close(); };
-}
-
-function updatePresence(users, count) {
-    let container = document.getElementById('presenceList');
-    let countSpan = document.getElementById('presenceCount');
-    if(countSpan) countSpan.innerText = count;
-    if(!container) return;
-    container.innerHTML = users.map(u => `<div class="presence-user"><span>${u.avatar||'👤'}</span><span>${u.username}</span><span class="online-dot"></span></div>`).join('');
-}
-
-function updateLiveContributors(contributors) { /* optional */ }
-
-// ----- CHAT: no system messages, only user messages -----
-function sendChatMessage() {
-    let input = document.getElementById('chatInput');
-    let msg = input.value.trim();
-    if(!msg) return;
-    if(!ws || ws.readyState !== WebSocket.OPEN) {
-        alert('Not connected to chat server.');
-        return;
-    }
-    ws.send(JSON.stringify({ type:'chat', message:msg }));
-    input.value = '';
-}
-
-function addChatMessage(msg) {
-    let container = document.getElementById('chatMessages');
-    if(!container) return;
-    // If empty, just add; no system message removal needed
-    let div = document.createElement('div');
-    div.className = msg.username === currentUser.username ? 'chat-message own' : 'chat-message other';
-    div.innerHTML = `<span class="msg-username">${msg.username} <span class="msg-time">${new Date(msg.timestamp).toLocaleTimeString()}</span></span>${msg.message}`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
-// Bind chat events
-document.addEventListener('DOMContentLoaded', function() {
-    const sendBtn = document.getElementById('chatSendBtn');
-    const input = document.getElementById('chatInput');
-    if (sendBtn) sendBtn.addEventListener('click', sendChatMessage);
-    if (input) input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') sendChatMessage();
-    });
-});
 
 async function loadLeaderboard() {
     try {
@@ -995,10 +921,8 @@ async function exportGeoJSON() {
 
 function showToast(msg,type) { alert(msg); }
 
-function togglePresence() { let el=document.querySelector('.presence-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 
-// Click handlers
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
@@ -1032,13 +956,46 @@ window.addEventListener('offline', () => { updateConnectionStatus(false); showTo
 updateConnectionStatus(navigator.onLine);
 initMap();
 loadCurrentUser();
-loadReports();
-loadLeaderboard();
-loadStats();
 setInterval(() => loadReports(), 30000);
 setInterval(() => updateKPIs(), 10000);
 setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
+
+// ================================================================
+//  CHAT – LOCAL ONLY (no WebSocket)
+// ================================================================
+let chatMessages = [];
+
+function addChatMessage(username, message, isOwn = false) {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = `chat-message ${isOwn ? 'own' : 'other'}`;
+    const time = new Date().toLocaleTimeString();
+    div.innerHTML = `<span class="msg-username">${username} <span class="msg-time">${time}</span></span>${message}`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function sendLocalChatMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    addChatMessage('You', text, true);
+    input.value = '';
+    // Optionally store in localStorage for persistence
+    chatMessages.push({ username: 'You', message: text, time: new Date().toISOString(), own: true });
+}
+
+// Bind chat events
+document.addEventListener('DOMContentLoaded', function() {
+    const sendBtn = document.getElementById('chatSendBtn');
+    const input = document.getElementById('chatInput');
+    if (sendBtn) sendBtn.addEventListener('click', sendLocalChatMessage);
+    if (input) input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendLocalChatMessage();
+    });
+});
 
 // ================================================================
 //  DRAGGABLE CHAT
@@ -1081,7 +1038,7 @@ setInterval(() => loadLeaderboard(), 10000);
 })();
 
 // ================================================================
-//  TOGGLE CHARTS COLLAPSIBLE
+//  TOGGLE CHARTS & SIDEBAR
 // ================================================================
 document.addEventListener('DOMContentLoaded', function() {
     const toggleBtn = document.getElementById('toggleChartsBtn');
@@ -1094,9 +1051,6 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => { if (map) map.invalidateSize(); }, 300);
     });
 
-    // ================================================================
-    //  TOGGLE SIDEBAR (Command Panel)
-    // ================================================================
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('sidebarPanel');
     let sidebarVisible = true;
