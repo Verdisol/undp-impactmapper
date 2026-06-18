@@ -490,12 +490,10 @@ UNIFIED_DASHBOARD_HTML = """
         <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:5px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <!-- EXPORT BUTTONS -->
         <span id="headerExportGroup" style="display:none; gap:5px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
-        <!-- TOGGLE SIDEBAR -->
         <button class="sync-btn" id="toggleSidebarBtn" title="Toggle Command Panel"><i class="fas fa-chevron-left"></i></button>
         <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
@@ -572,10 +570,9 @@ UNIFIED_DASHBOARD_HTML = """
     </div>
 </div>
 
-<!-- LEADERBOARD PANEL (REST only) -->
 <div class="leaderboard-panel"><div class="leaderboard-header" onclick="toggleLeaderboard()"><span><i class="fas fa-trophy"></i> Leaderboard</span><span>🏆</span></div><div id="leaderboardList" class="leaderboard-list">Loading...</div></div>
 
-<!-- CRISIS CHAT PANEL – NO WEBSOCKET, LOCAL ONLY -->
+<!-- CRISIS CHAT PANEL – LOCAL ONLY, NO WEBSOCKET -->
 <div class="chat-panel" id="glowChat">
     <div class="chat-header" id="chatDragHandle">
         <h4><span class="pulse-dot"></span> CRISIS CHAT</h4>
@@ -589,6 +586,11 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <script>
+// ================================================================
+//  COMPLETE SCRIPT – NO WEBSOCKET, NO CONNECTION ATTEMPTS
+// ================================================================
+
+// Basic data and map logic (same as before, but we strip out all ws)
 let map, markers = [], reports = [];
 let currentUser = { username: '', role: '', avatar: '', color: '#2ecc71', points: 0, badge: '' };
 let currentLang = localStorage.getItem('language') || 'en';
@@ -961,7 +963,7 @@ setInterval(() => updateCommandCenterCharts(), 15000);
 setInterval(() => loadLeaderboard(), 10000);
 
 // ================================================================
-//  CHAT – LOCAL ONLY (no WebSocket, no connection attempts)
+//  CHAT – LOCAL ONLY (no WebSocket, no errors)
 // ================================================================
 function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
