@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – with header customized
+# UNIFIED DASHBOARD HTML – export options kept, but reduced in size
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -707,10 +707,10 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ---- HEADER 64px (customized) ---- */
+        /* ---- HEADER with increased width ---- */
         .system-bar {
             background: #1a472a;
-            padding: 6px 16px !important;
+            padding: 6px 40px !important;   /* increased horizontal padding */
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -793,6 +793,29 @@ UNIFIED_DASHBOARD_HTML = """
         .role-badge {
             background: rgba(255,255,200,0.85) !important;
             color: #000 !important;
+        }
+
+        /* ---- EXPORT BUTTONS IN HEADER – kept, but REDUCED by ~60% ---- */
+        #headerExportGroup {
+            display: inline-flex !important;  /* visible */
+            gap: 4px;
+            align-items: center;
+        }
+        #headerExportGroup .sync-btn {
+            font-size: 0.5rem !important;      /* smaller */
+            padding: 2px 5px !important;
+            background: rgba(255,255,255,0.8) !important;
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            border-radius: 3px !important;
+            font-weight: 700 !important;
+            color: #000 !important;
+        }
+        #headerExportGroup .sync-btn i {
+            font-size: 0.7em !important;
+        }
+        #headerExportGroup .sync-btn:hover {
+            background: #fff !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
         }
 
         /* override icon sizes inside these controls */
@@ -1145,6 +1168,21 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-input-area button:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(0,255,200,0.15); }
         .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 18px 0; opacity: 0.15; }
 
+        /* ---- REDUCED EXPORT CARD IN SIDEBAR (shrink by ~60%) ---- */
+        #exportCard {
+            padding: 6px 10px !important;
+            margin-bottom: 6px !important;
+        }
+        #exportCard h3 {
+            font-size: 0.6rem !important;
+            margin-bottom: 4px !important;
+        }
+        #exportCard button {
+            font-size: 0.55rem !important;
+            padding: 3px 6px !important;
+            margin-top: 2px !important;
+        }
+
         @media (max-width: 1000px) {
             .sidebar { width: 100%; max-height: 35vh; }
             .right-panel { height: 65vh; }
@@ -1154,7 +1192,7 @@ UNIFIED_DASHBOARD_HTML = """
             .controls-right { flex-wrap: wrap; justify-content: flex-end; }
         }
         @media (max-width: 600px) {
-            .system-bar { flex-wrap: wrap; gap: 4px; height: auto !important; min-height: 56px !important; }
+            .system-bar { flex-wrap: wrap; gap: 4px; height: auto !important; min-height: 56px !important; padding: 6px 16px !important; }
             .brand-center { order: 1; width: 100%; }
             .controls-right { order: 2; justify-content: center; flex-wrap: wrap; }
             .chat-panel { width: 260px !important; left: 10px !important; bottom: 10px !important; }
@@ -1180,6 +1218,7 @@ UNIFIED_DASHBOARD_HTML = """
         <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
+        <!-- Export options – now visible but reduced in size -->
         <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
@@ -1635,8 +1674,16 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        if(user.role === 'admin') { document.getElementById('exportCard').style.display = 'block'; document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; isAdmin=true; }
-        else { document.getElementById('exportCard').style.display = 'none'; isAdmin=false; }
+        if(user.role === 'admin') { 
+            document.getElementById('exportCard').style.display = 'block'; 
+            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; 
+            document.getElementById('headerExportGroup').style.display = 'inline-flex';  // show export buttons
+            isAdmin=true; 
+        } else { 
+            document.getElementById('exportCard').style.display = 'none'; 
+            document.getElementById('headerExportGroup').style.display = 'none'; 
+            isAdmin=false; 
+        }
         loadReports();
         loadLeaderboard();
         loadStats();
