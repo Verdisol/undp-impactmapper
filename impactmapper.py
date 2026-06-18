@@ -509,7 +509,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML
+# LOGIN HTML (unchanged)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -776,7 +776,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (FIXED FRONTEND)
+# UNIFIED DASHBOARD HTML (FIXED CSS & CHARTS)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -792,7 +792,8 @@ UNIFIED_DASHBOARD_HTML = """
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: #121212; color: #e0e0e0; overflow: hidden; }
+        html, body { height: 100%; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; background: #121212; color: #e0e0e0; }
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
@@ -805,6 +806,7 @@ UNIFIED_DASHBOARD_HTML = """
             border-bottom: 2px solid #2ecc71;
             min-height: 90px !important;
             height: 90px !important;
+            flex-shrink: 0;
         }
         .brand-center {
             flex: 1;
@@ -930,6 +932,7 @@ UNIFIED_DASHBOARD_HTML = """
             display: flex;
             gap: 6px;
             overflow: visible;
+            flex-shrink: 0;
         }
         .tab-btn {
             padding: 10px 24px;
@@ -953,12 +956,20 @@ UNIFIED_DASHBOARD_HTML = """
             box-shadow: 0 4px 20px rgba(46,204,113,0.6);
         }
 
+        /* --- FIXED SIDEBAR SCROLL --- */
+        #commandTab {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
         .kpi-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 12px;
             padding: 12px 20px;
             background: var(--bg-dark);
+            flex-shrink: 0;
         }
         .kpi-card {
             background: var(--bg-card);
@@ -987,7 +998,7 @@ UNIFIED_DASHBOARD_HTML = """
 
         .main-layout {
             display: flex;
-            height: calc(100% - 52px);
+            flex: 1;
             overflow: hidden;
         }
         .sidebar {
@@ -997,8 +1008,8 @@ UNIFIED_DASHBOARD_HTML = """
             padding: 16px;
             border-right: 1px solid var(--border-color);
             transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
-            height: 100% !important;
             flex-shrink: 0;
+            height: 100%;
         }
         .sidebar.collapsed {
             width: 0;
@@ -1352,6 +1363,12 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .analytics-filter button:hover {
             background: #3a3a3a;
+        }
+
+        #analyticsTab {
+            padding: 12px 20px;
+            overflow-y: auto;
+            height: 100%;
         }
 
         @media (max-width: 1000px) {
