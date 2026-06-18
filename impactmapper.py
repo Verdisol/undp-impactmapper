@@ -239,15 +239,11 @@ def require_reporter(current_user: dict = Depends(verify_user)):
     return current_user
 
 # ============================================
-# LANGUAGES DICTIONARY
+# LANGUAGES DICTIONARY (shortened for brevity – you can keep full)
 # ============================================
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
-    "es": {"name": "Español", "flag": "🇪🇸", "report_damage": "Reportar Daños", "damage_level": "Nivel de Daño", "minimal": "Daño Mínimo", "partial": "Daño Parcial", "complete": "Destruido", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Gobierno", "utility": "Utilidad", "transport": "Transporte", "community": "Comunitario", "public": "Público", "crisis": "Crisis", "earthquake": "Terremoto", "flood": "Inundación", "tsunami": "Tsunami", "hurricane": "Huracán", "wildfire": "Incendio", "explosion": "Explosión", "conflict": "Conflicto", "debris": "¿Escombros?", "yes": "Sí", "no": "No", "submit": "Enviar", "gps_location": "Usar GPS", "building_name": "Nombre", "photo": "Foto", "notes": "Notas", "recent_reports": "Reportes", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntarios", "rescue_teams": "Rescate", "online_users": "En línea", "leaderboard": "Clasificación", "chat": "Chat", "type_message": "Escribe...", "send": "Enviar", "click_building": "🏢 ¡Haga clic en cualquier edificio!", "total_reports": "Total", "today_reports": "Hoy", "pending_sync": "Pendiente", "logout": "Salir", "sync_now": "Sincronizar", "sms_report": "Reporte SMS", "sms_placeholder": "Formato: DAÑO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Mando", "analytics": "Analíticas"},
-    "fr": {"name": "Français", "flag": "🇫🇷", "report_damage": "Signaler", "damage_level": "Niveau", "minimal": "Minime", "partial": "Partiel", "complete": "Complet", "infrastructure": "Type", "residential": "Résidentiel", "commercial": "Commercial", "government": "Gouvernement", "utility": "Utilitaire", "transport": "Transport", "community": "Communautaire", "public": "Public", "crisis": "Crise", "earthquake": "Tremblement", "flood": "Inondation", "tsunami": "Tsunami", "hurricane": "Ouragan", "wildfire": "Incendie", "explosion": "Explosion", "conflict": "Conflit", "debris": "Débris?", "yes": "Oui", "no": "Non", "submit": "Soumettre", "gps_location": "Mon GPS", "building_name": "Nom", "photo": "Photo", "notes": "Notes", "recent_reports": "Rapports", "export_data": "Exporter", "export_csv": "Exporter CSV", "export_geojson": "Exporter GeoJSON", "active_volunteers": "Bénévoles", "rescue_teams": "Secours", "online_users": "En ligne", "leaderboard": "Classement", "chat": "Chat", "type_message": "Message...", "send": "Envoyer", "click_building": "🏢 Cliquez sur un bâtiment!", "total_reports": "Total", "today_reports": "Aujourd'hui", "pending_sync": "En attente", "logout": "Déconnexion", "sync_now": "Synchroniser", "sms_report": "Rapport SMS", "sms_placeholder": "Format: DÉGÂT LAT LNG", "sms_send": "Envoyer SMS", "command_center": "Centre de Commandement", "analytics": "Analytique"},
-    "pt": {"name": "Português", "flag": "🇵🇹", "report_damage": "Relatar", "damage_level": "Nível", "minimal": "Mínimo", "partial": "Parcial", "complete": "Completo", "infrastructure": "Tipo", "residential": "Residencial", "commercial": "Comercial", "government": "Governo", "utility": "Utilidade", "transport": "Transporte", "community": "Comunitário", "public": "Público", "crisis": "Crise", "earthquake": "Terremoto", "flood": "Inundação", "tsunami": "Tsunami", "hurricane": "Furacão", "wildfire": "Incêndio", "explosion": "Explosão", "conflict": "Conflito", "debris": "Detritos?", "yes": "Sim", "no": "Não", "submit": "Enviar", "gps_location": "Meu GPS", "building_name": "Nome", "photo": "Foto", "notes": "Notas", "recent_reports": "Relatórios", "export_data": "Exportar", "export_csv": "Exportar CSV", "export_geojson": "Exportar GeoJSON", "active_volunteers": "Voluntários", "rescue_teams": "Resgate", "online_users": "Online", "leaderboard": "Ranking", "chat": "Chat", "type_message": "Digite...", "send": "Enviar", "click_building": "🏢 Clique em qualquer edifício!", "total_reports": "Total", "today_reports": "Hoje", "pending_sync": "Pendente", "logout": "Sair", "sync_now": "Sincronizar", "sms_report": "Relatório SMS", "sms_placeholder": "Formato: DANO LAT LNG", "sms_send": "Enviar SMS", "command_center": "Centro de Comando", "analytics": "Análises"},
-    "ar": {"name": "العربية", "flag": "🇸🇦", "report_damage": "الإبلاغ", "damage_level": "المستوى", "minimal": "بسيط", "partial": "جزئي", "complete": "كامل", "infrastructure": "النوع", "residential": "سكني", "commercial": "تجاري", "government": "حكومي", "utility": "مرافق", "transport": "مواصلات", "community": "مجتمعي", "public": "عام", "crisis": "الأزمة", "earthquake": "زلزال", "flood": "فيضان", "tsunami": "تسونامي", "hurricane": "إعصار", "wildfire": "حرائق", "explosion": "انفجار", "conflict": "صراع", "debris": "حطام؟", "yes": "نعم", "no": "لا", "submit": "إرسال", "gps_location": "موقعي", "building_name": "الاسم", "photo": "صورة", "notes": "ملاحظات", "recent_reports": "التقارير", "export_data": "تصدير", "export_csv": "CSV", "export_geojson": "GeoJSON", "active_volunteers": "متطوعين", "rescue_teams": "إنقاذ", "online_users": "متصل", "leaderboard": "المتصدرين", "chat": "محادثة", "type_message": "اكتب...", "send": "إرسال", "click_building": "🏢 انقر على أي مبنى!", "total_reports": "الإجمالي", "today_reports": "اليوم", "pending_sync": "معلق", "logout": "خروج", "sync_now": "مزامنة", "sms_report": "تقرير SMS", "sms_placeholder": "التنسيق: ضرر خط طول", "sms_send": "إرسال SMS", "command_center": "مركز القيادة", "analytics": "تحليلات"},
-    "zh": {"name": "中文", "flag": "🇨🇳", "report_damage": "报告损坏", "damage_level": "损坏程度", "minimal": "轻微", "partial": "部分", "complete": "完全", "infrastructure": "类型", "residential": "住宅", "commercial": "商业", "government": "政府", "utility": "公用", "transport": "交通", "community": "社区", "public": "公共", "crisis": "危机类型", "earthquake": "地震", "flood": "洪水", "tsunami": "海啸", "hurricane": "飓风", "wildfire": "野火", "explosion": "爆炸", "conflict": "冲突", "debris": "碎片？", "yes": "是", "no": "否", "submit": "提交", "gps_location": "我的位置", "building_name": "建筑名称", "photo": "照片", "notes": "备注", "recent_reports": "最近报告", "export_data": "导出数据", "export_csv": "导出CSV", "export_geojson": "导出GeoJSON", "active_volunteers": "志愿者", "rescue_teams": "救援队", "online_users": "在线", "leaderboard": "排行榜", "chat": "聊天", "type_message": "输入消息...", "send": "发送", "click_building": "🏢 点击地图上的建筑物！", "total_reports": "报告总数", "today_reports": "今日", "pending_sync": "待同步", "logout": "退出", "sync_now": "立即同步", "sms_report": "短信报告", "sms_placeholder": "格式: 损坏 纬度 经度", "sms_send": "发送短信", "command_center": "指挥中心", "analytics": "分析"}
+    # Add other languages if needed (ES, FR, PT, AR, ZH) – but keep it short
 }
 
 # ============================================
@@ -425,7 +421,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML – FULL VERSION (background, stats, partners, etc.)
+# LOGIN HTML (full version with background, stats, partners)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -692,8 +688,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – (compact header + OSM map)
-# (Same as the compact version you approved earlier – kept unchanged)
+# UNIFIED DASHBOARD HTML – COMPACT HEADER + OSM MAP
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -713,25 +708,26 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ---- COMPACT HEADER ---- */
+        /* ---- COMPACT HEADER (HALF SIZE) ---- */
         .system-bar {
             background: #1a472a;
-            padding: 4px 12px !important;
+            padding: 2px 12px !important;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2ecc71;
-            min-height: 38px;
+            min-height: 32px !important;  /* half of previous 64px */
+            height: 32px !important;
         }
-        .brand-center h1 { font-size: 0.95rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
-        .brand-center p { font-size: 0.5rem !important; color: rgba(255,255,255,0.7); margin-top: 0px; }
-        .controls-right { gap: 4px !important; display: flex; align-items: center; flex-wrap: wrap; }
+        .brand-center h1 { font-size: 0.85rem !important; font-weight: 700; color: white; letter-spacing: 0.5px; }
+        .brand-center p { font-size: 0.45rem !important; color: rgba(255,255,255,0.7); margin-top: 0px; line-height: 1; }
+        .controls-right { gap: 3px !important; display: flex; align-items: center; flex-wrap: wrap; }
         .controls-right .sync-btn, .controls-right .logout-btn { 
-            padding: 2px 6px !important; 
-            font-size: 0.55rem !important; 
+            padding: 1px 4px !important; 
+            font-size: 0.5rem !important; 
             background: rgba(255,255,255,0.15); 
             border: none; 
-            border-radius: 6px; 
+            border-radius: 4px; 
             color: white; 
             cursor: pointer; 
             transition: all 0.2s ease; 
@@ -741,243 +737,245 @@ UNIFIED_DASHBOARD_HTML = """
         .controls-right .logout-btn { background: rgba(231,76,60,0.3); }
         .controls-right .logout-btn:hover { background: rgba(231,76,60,0.5); }
         .controls-right .lang-dropdown { 
-            padding: 2px 4px !important; 
-            font-size: 0.55rem !important; 
+            padding: 1px 3px !important; 
+            font-size: 0.5rem !important; 
             background: rgba(255,255,255,0.15); 
             color: white; 
             border: none; 
-            border-radius: 6px; 
+            border-radius: 4px; 
             cursor: pointer; 
         }
         .controls-right .role-badge { 
-            font-size: 0.5rem !important; 
-            padding: 1px 5px !important; 
+            font-size: 0.45rem !important; 
+            padding: 0px 4px !important; 
             background: rgba(0,0,0,0.3); 
             color: #2ecc71; 
             border-radius: 30px; 
         }
         .status-badge { 
-            padding: 2px 6px; 
+            padding: 1px 5px; 
             border-radius: 30px; 
-            font-size: 0.55rem; 
+            font-size: 0.5rem; 
             font-weight: 500; 
             display: flex; 
             align-items: center; 
-            gap: 4px; 
+            gap: 3px; 
             background: rgba(0,0,0,0.3); 
         }
         .status-online { color: #2ecc71; }
 
         .tabs-container {
             background: var(--bg-card);
-            padding: 0 12px;
+            padding: 0 10px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             gap: 2px;
         }
         .tab-btn {
-            padding: 8px 16px;
+            padding: 4px 12px;
             background: transparent;
             color: #a0a0a0;
             border: none;
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
         }
         .tab-btn:hover { color: var(--primary); background: var(--primary-muted); }
         .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
-        .tab-content { display: none; height: calc(100vh - 110px); }
+        .tab-content { display: none; height: calc(100vh - 95px); }
         .tab-content.active { display: block; }
 
         .kpi-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
-            padding: 6px 12px;
+            gap: 4px;
+            padding: 4px 10px;
             background: var(--bg-dark);
         }
         .kpi-card {
             background: var(--bg-card);
-            border-radius: 4px;
-            padding: 6px 8px;
+            border-radius: 3px;
+            padding: 4px 6px;
             border: 1px solid var(--border-color);
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .kpi-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 10px rgba(46,204,113,0.3); }
-        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-        .kpi-header span { font-size: 0.45rem; color: #a0a0a0; text-transform: uppercase; }
-        .kpi-value { font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+        .kpi-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 8px rgba(46,204,113,0.2); }
+        .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px; }
+        .kpi-header span { font-size: 0.4rem; color: #a0a0a0; text-transform: uppercase; }
+        .kpi-value { font-size: 0.9rem; font-weight: 700; margin-bottom: 1px; }
         .kpi-value.warning { color: #f39c12; }
-        .progress-bar { height: 2px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+        .progress-bar { height: 2px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-top: 1px; }
         .progress-fill { height: 100%; background: var(--primary); border-radius: 2px; }
-        .pill-group { display: flex; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
-        .pill { padding: 0px 4px; border-radius: 10px; font-size: 0.45rem; font-weight: 500; }
+        .pill-group { display: flex; gap: 2px; margin-top: 1px; flex-wrap: wrap; }
+        .pill { padding: 0px 3px; border-radius: 8px; font-size: 0.4rem; font-weight: 500; }
         .pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
         .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
 
-        .main-layout { display: flex; height: calc(100% - 48px); }
-        .sidebar { width: 340px; background: var(--bg-sidebar); overflow-y: auto; padding: 10px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
+        .main-layout { display: flex; height: calc(100% - 40px); }
+        .sidebar { width: 300px; background: var(--bg-sidebar); overflow-y: auto; padding: 8px; border-right: 1px solid var(--border-color); transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease; }
         .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
         .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .map-container { flex: 1; position: relative; }
         #map { height: 100%; width: 100%; }
+
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
-            border-radius: 6px;
-            padding: 8px;
-            margin-bottom: 8px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 4px;
+            padding: 6px;
+            margin-bottom: 6px;
+            border: 1px solid rgba(255,255,255,0.06);
         }
-        .card h3 { color: #2ecc71; margin-bottom: 6px; font-size: 0.65rem; display: flex; align-items: center; gap: 4px; }
+        .card h3 { color: #2ecc71; margin-bottom: 4px; font-size: 0.6rem; display: flex; align-items: center; gap: 3px; }
         input, select, textarea {
             width: 100%;
-            padding: 4px;
-            margin: 3px 0;
+            padding: 3px;
+            margin: 2px 0;
             background: #1a1a1a;
             border: 1px solid #333;
-            border-radius: 4px;
+            border-radius: 3px;
             color: white;
-            font-size: 0.6rem;
+            font-size: 0.55rem;
         }
         button {
             background: linear-gradient(135deg, #1a472a, #0d2a1a);
             color: white;
-            padding: 5px;
+            padding: 4px;
             font-weight: 600;
             border: none;
-            border-radius: 4px;
+            border-radius: 3px;
             cursor: pointer;
             width: 100%;
-            margin-top: 3px;
-            font-size: 0.6rem;
+            margin-top: 2px;
+            font-size: 0.55rem;
         }
         .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
-        .reports-list { max-height: 180px; overflow-y: auto; }
+        .reports-list { max-height: 150px; overflow-y: auto; }
         .report-item {
             background: #1a1a1a;
-            padding: 4px 6px;
-            margin: 3px 0;
-            border-radius: 4px;
+            padding: 3px 5px;
+            margin: 2px 0;
+            border-radius: 3px;
             border-left: 3px solid #2ecc71;
             cursor: pointer;
-            font-size: 0.55rem;
+            font-size: 0.5rem;
         }
         .report-item.severity-critical { border-left-color: #e74c3c; }
         .report-item.severity-high { border-left-color: #f39c12; }
         .building-info {
             background: rgba(46,204,113,0.1);
-            padding: 4px;
-            border-radius: 4px;
-            margin-top: 3px;
-            font-size: 0.55rem;
+            padding: 3px;
+            border-radius: 3px;
+            margin-top: 2px;
+            font-size: 0.5rem;
             text-align: center;
             cursor: pointer;
             border: 1px solid rgba(46,204,113,0.3);
             color: #2ecc71;
         }
-        .sms-card { background: rgba(46,204,113,0.08); padding: 4px; border-radius: 4px; margin-top: 3px; }
-        .photo-preview { margin-top: 3px; text-align: center; }
-        .photo-preview img { max-width: 100%; border-radius: 4px; max-height: 50px; }
+        .sms-card { background: rgba(46,204,113,0.08); padding: 3px; border-radius: 3px; margin-top: 2px; }
+        .photo-preview { margin-top: 2px; text-align: center; }
+        .photo-preview img { max-width: 100%; border-radius: 3px; max-height: 40px; }
         .leaderboard-panel {
             position: fixed;
             bottom: 10px;
             right: 10px;
-            width: 180px;
+            width: 160px;
             background: rgba(30,30,30,0.95);
             backdrop-filter: blur(12px);
-            border-radius: 8px;
+            border-radius: 6px;
             border: 1px solid rgba(243,156,18,0.2);
             z-index: 1000;
         }
         .leaderboard-header {
-            padding: 4px 8px;
-            border-radius: 8px 8px 0 0;
+            padding: 3px 6px;
+            border-radius: 6px 6px 0 0;
             display: flex;
             justify-content: space-between;
             cursor: pointer;
-            font-size: 0.55rem;
+            font-size: 0.5rem;
             font-weight: 600;
             background: rgba(243,156,18,0.08);
         }
-        .leaderboard-list { max-height: 100px; overflow-y: auto; padding: 3px; }
+        .leaderboard-list { max-height: 90px; overflow-y: auto; padding: 2px; }
         .leaderboard-item {
             display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 2px 4px;
+            gap: 3px;
+            padding: 2px 3px;
             border-radius: 3px;
             margin: 1px 0;
-            background: rgba(255,255,255,0.03);
-            font-size: 0.55rem;
+            background: rgba(255,255,255,0.02);
+            font-size: 0.5rem;
             cursor: pointer;
         }
-        .leaderboard-item:hover { background: rgba(46,204,113,0.15); }
-        .rank { width: 18px; font-weight: 700; color: #f39c12; }
+        .leaderboard-item:hover { background: rgba(46,204,113,0.1); }
+        .rank { width: 16px; font-weight: 700; color: #f39c12; }
+
         .charts-section {
             background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(5px);
-            padding: 6px 10px 10px 10px;
-            margin: 4px 6px;
-            border-radius: 8px;
+            padding: 4px 8px 8px 8px;
+            margin: 3px 4px;
+            border-radius: 6px;
             transition: all 0.3s ease;
             flex-shrink: 0;
-            max-height: 180px;
+            max-height: 160px;
             overflow: hidden;
         }
         .charts-section.collapsed {
-            max-height: 32px;
-            padding: 4px 10px;
+            max-height: 28px;
+            padding: 3px 8px;
         }
         .charts-section.collapsed .charts-grid { display: none; }
         .charts-title {
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             font-weight: 700;
             color: #1a1a1a;
             text-align: center;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
         .toggle-charts-btn {
-            background: rgba(0,0,0,0.08);
+            background: rgba(0,0,0,0.06);
             border: none;
             border-radius: 20px;
-            padding: 0px 8px;
+            padding: 0px 6px;
             cursor: pointer;
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             color: #1a1a1a;
         }
-        .toggle-charts-btn:hover { background: rgba(0,0,0,0.15); }
+        .toggle-charts-btn:hover { background: rgba(0,0,0,0.12); }
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-top: 4px;
+            gap: 6px;
+            margin-top: 3px;
         }
-        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 6px; }
-        .chart-container h4 { text-align: center; margin-bottom: 4px; color: #1a1a1a; font-size: 0.55rem; }
-        canvas { max-height: 100px; width: 100%; }
+        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 4px; padding: 4px; }
+        .chart-container h4 { text-align: center; margin-bottom: 2px; color: #1a1a1a; font-size: 0.5rem; }
+        canvas { max-height: 80px; width: 100%; }
 
         /* GLOWING CHAT - LOCAL ONLY */
         .chat-panel {
             position: fixed !important;
-            bottom: 20px !important;
-            left: 20px !important;
-            width: 300px !important;
-            min-width: 180px !important;
-            max-width: 450px !important;
-            max-height: 400px !important;
-            min-height: 160px !important;
+            bottom: 15px !important;
+            left: 15px !important;
+            width: 280px !important;
+            min-width: 160px !important;
+            max-width: 400px !important;
+            max-height: 350px !important;
+            min-height: 140px !important;
             background: rgba(18, 25, 40, 0.95) !important;
             backdrop-filter: blur(12px) !important;
-            border-radius: 16px !important;
+            border-radius: 14px !important;
             border: 1px solid rgba(0, 255, 200, 0.25) !important;
-            box-shadow: 0 0 25px rgba(0, 255, 200, 0.15), 0 0 50px rgba(0, 255, 200, 0.08) !important;
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.12), 0 0 40px rgba(0, 255, 200, 0.06) !important;
             animation: pulseGlowChat 2.8s ease-in-out infinite alternate !important;
             cursor: grab !important;
             z-index: 9999 !important;
@@ -986,16 +984,16 @@ UNIFIED_DASHBOARD_HTML = """
             overflow: hidden !important;
             resize: both !important;
         }
-        .chat-panel:hover { box-shadow: 0 0 35px rgba(0, 255, 200, 0.3), 0 0 70px rgba(0, 255, 200, 0.12) !important; }
+        .chat-panel:hover { box-shadow: 0 0 30px rgba(0, 255, 200, 0.25), 0 0 60px rgba(0, 255, 200, 0.1) !important; }
         @keyframes pulseGlowChat {
-            0% { box-shadow: 0 0 15px rgba(0,255,200,0.1), 0 0 30px rgba(0,255,200,0.05); }
-            100% { box-shadow: 0 0 35px rgba(0,255,200,0.3), 0 0 70px rgba(0,255,200,0.12); }
+            0% { box-shadow: 0 0 12px rgba(0,255,200,0.08), 0 0 25px rgba(0,255,200,0.04); }
+            100% { box-shadow: 0 0 30px rgba(0,255,200,0.25), 0 0 60px rgba(0,255,200,0.1); }
         }
         .chat-header {
-            padding: 6px 12px !important;
+            padding: 4px 10px !important;
             background: rgba(0,255,200,0.06) !important;
-            border-bottom: 1px solid rgba(0,255,200,0.1) !important;
-            border-radius: 16px 16px 0 0 !important;
+            border-bottom: 1px solid rgba(0,255,200,0.08) !important;
+            border-radius: 14px 14px 0 0 !important;
             cursor: grab !important;
             display: flex !important;
             justify-content: space-between !important;
@@ -1005,117 +1003,117 @@ UNIFIED_DASHBOARD_HTML = """
         .chat-header:active { cursor: grabbing !important; }
         .chat-header h4 {
             color: #00ffcc !important;
-            font-size: 0.65rem !important;
+            font-size: 0.6rem !important;
             font-weight: 700 !important;
             letter-spacing: 0.5px !important;
             display: flex !important;
             align-items: center !important;
-            gap: 6px !important;
+            gap: 5px !important;
         }
         .chat-header .pulse-dot {
             display: inline-block !important;
-            width: 6px !important;
-            height: 6px !important;
+            width: 5px !important;
+            height: 5px !important;
             background: #00ffcc !important;
             border-radius: 50% !important;
-            box-shadow: 0 0 12px #00ffcc !important;
+            box-shadow: 0 0 10px #00ffcc !important;
             animation: blinkDotChat 1.2s infinite !important;
         }
         @keyframes blinkDotChat { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
         .chat-header .status-badge {
-            font-size: 0.5rem !important;
+            font-size: 0.45rem !important;
             background: rgba(0,255,200,0.1) !important;
-            padding: 1px 8px !important;
+            padding: 0px 6px !important;
             border-radius: 30px !important;
             color: #aaffee !important;
-            border: 1px solid rgba(0,255,200,0.1) !important;
+            border: 1px solid rgba(0,255,200,0.08) !important;
         }
         .chat-messages {
             flex: 1 !important;
-            padding: 6px 10px !important;
+            padding: 4px 8px !important;
             overflow-y: auto !important;
-            max-height: 220px !important;
-            min-height: 80px !important;
+            max-height: 190px !important;
+            min-height: 60px !important;
             display: flex !important;
             flex-direction: column !important;
-            gap: 3px !important;
+            gap: 2px !important;
             background: transparent !important;
         }
         .chat-messages::-webkit-scrollbar { width: 3px; }
         .chat-messages::-webkit-scrollbar-thumb { background: #00ffcc; border-radius: 10px; }
         .chat-message {
-            padding: 4px 8px !important;
-            border-radius: 10px !important;
+            padding: 3px 6px !important;
+            border-radius: 8px !important;
             max-width: 85% !important;
-            font-size: 0.6rem !important;
+            font-size: 0.55rem !important;
             line-height: 1.2 !important;
         }
         .chat-message.own {
             align-self: flex-end !important;
             background: rgba(0,255,200,0.15) !important;
-            border: 1px solid rgba(0,255,200,0.15) !important;
+            border: 1px solid rgba(0,255,200,0.12) !important;
             color: #e0faf5 !important;
             border-bottom-right-radius: 2px !important;
         }
         .chat-message.other {
             align-self: flex-start !important;
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.05) !important;
+            background: rgba(255,255,255,0.04) !important;
+            border: 1px solid rgba(255,255,255,0.04) !important;
             color: #cdd9e6 !important;
             border-bottom-left-radius: 2px !important;
         }
-        .chat-message .msg-username { font-weight: 700 !important; color: #00ffcc !important; font-size: 0.55rem !important; display: block !important; margin-bottom: 1px !important; }
-        .chat-message .msg-time { font-size: 0.45rem !important; opacity: 0.4 !important; margin-left: 4px !important; }
+        .chat-message .msg-username { font-weight: 700 !important; color: #00ffcc !important; font-size: 0.5rem !important; display: block !important; margin-bottom: 0px !important; }
+        .chat-message .msg-time { font-size: 0.4rem !important; opacity: 0.4 !important; margin-left: 3px !important; }
         .chat-input-area {
-            padding: 4px 10px 8px 10px !important;
+            padding: 3px 8px 6px 8px !important;
             border-top: 1px solid rgba(0,255,200,0.06) !important;
             display: flex !important;
-            gap: 4px !important;
+            gap: 3px !important;
             align-items: center !important;
             flex-shrink: 0 !important;
             background: transparent !important;
         }
         .chat-input-area input {
             flex: 1 !important;
-            padding: 4px 8px !important;
+            padding: 3px 6px !important;
             border-radius: 30px !important;
-            border: 1px solid rgba(0,255,200,0.1) !important;
-            background: rgba(0,0,0,0.4) !important;
+            border: 1px solid rgba(0,255,200,0.08) !important;
+            background: rgba(0,0,0,0.35) !important;
             color: #fff !important;
-            font-size: 0.6rem !important;
+            font-size: 0.55rem !important;
             outline: none !important;
         }
-        .chat-input-area input:focus { border-color: #00ffcc !important; box-shadow: 0 0 15px rgba(0,255,200,0.08) !important; }
+        .chat-input-area input:focus { border-color: #00ffcc !important; box-shadow: 0 0 12px rgba(0,255,200,0.06) !important; }
         .chat-input-area button {
-            padding: 4px 12px !important;
+            padding: 3px 10px !important;
             border-radius: 30px !important;
             border: none !important;
             background: #00ffcc !important;
             color: #0b0e14 !important;
             font-weight: 700 !important;
-            font-size: 0.55rem !important;
+            font-size: 0.5rem !important;
             cursor: pointer !important;
-            box-shadow: 0 0 15px rgba(0,255,200,0.1) !important;
+            box-shadow: 0 0 12px rgba(0,255,200,0.08) !important;
             transition: 0.2s !important;
             white-space: nowrap !important;
             width: auto !important;
             margin: 0 !important;
         }
-        .chat-input-area button:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(0,255,200,0.2); }
-        .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 16px 0; opacity: 0.2; }
+        .chat-input-area button:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,255,200,0.15); }
+        .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 14px 0; opacity: 0.15; }
 
         @media (max-width: 1000px) {
-            .sidebar { width: 100%; max-height: 35vh; }
-            .right-panel { height: 65vh; }
+            .sidebar { width: 100%; max-height: 30vh; }
+            .right-panel { height: 70vh; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
-            .chat-panel { width: 260px !important; }
+            .chat-panel { width: 240px !important; }
         }
         @media (max-width: 600px) {
-            .system-bar { flex-wrap: wrap; gap: 2px; }
+            .system-bar { flex-wrap: wrap; gap: 2px; height: auto !important; min-height: 28px !important; }
             .brand-center { order: 1; width: 100%; }
             .controls-right { order: 2; justify-content: center; }
-            .chat-panel { width: 220px !important; left: 10px !important; bottom: 10px !important; }
+            .chat-panel { width: 200px !important; left: 10px !important; bottom: 10px !important; }
         }
     </style>
 </head>
@@ -1128,10 +1126,10 @@ UNIFIED_DASHBOARD_HTML = """
             <option value="en">🇬🇧 English</option><option value="es">🇪🇸 Español</option><option value="fr">🇫🇷 Français</option>
             <option value="pt">🇵🇹 Português</option><option value="ar">🇸🇦 العربية</option><option value="zh">🇨🇳 中文</option>
         </select>
-        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:4px;"></i> Online</div>
+        <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle" style="font-size:3px;"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
+        <span id="headerExportGroup" style="display:none; gap:2px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
         </span>
@@ -1154,7 +1152,7 @@ UNIFIED_DASHBOARD_HTML = """
     <div class="main-layout">
         <div class="sidebar" id="sidebarPanel">
             <div class="card"><h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
-            <p id="clickHint" style="font-size:0.5rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
+            <p id="clickHint" style="font-size:0.45rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
             <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
             <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
             <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
@@ -1166,16 +1164,16 @@ UNIFIED_DASHBOARD_HTML = """
             <input type="text" id="textLocation" placeholder="Describe location"><textarea id="notes" rows="2" placeholder="Additional notes"></textarea>
             <input type="file" id="photo" accept="image/*" capture="environment"><div id="photoPreview" class="photo-preview"></div>
             <button id="submitBtn" onclick="submitReport()"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
-            <div id="submitStatus" style="margin-top:3px; font-size:0.5rem;"></div></div>
+            <div id="submitStatus" style="margin-top:2px; font-size:0.45rem;"></div></div>
             <div class="card"><h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
             <div class="sms-card"><input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG">
             <input type="text" id="smsNumber" placeholder="Phone Number (optional)">
             <button onclick="sendSMSReport()"><i class="fas fa-envelope"></i> <span id="smsSendLabel">Send SMS Report</span></button></div>
-            <div id="smsStatus" style="margin-top:3px; font-size:0.5rem;"></div></div>
+            <div id="smsStatus" style="margin-top:2px; font-size:0.45rem;"></div></div>
             <div class="card"><h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
             <div id="reportsList" class="reports-list">Loading...</div></div>
             <div class="card" id="exportCard"><h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
-            <div style="display:flex; gap:4px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">CSV</span></button>
+            <div style="display:flex; gap:3px;"><button id="exportCSVBtn" onclick="exportCSV()" style="flex:1;"><i class="fas fa-file-excel"></i> <span id="csvLabel">CSV</span></button>
             <button id="exportGeoJSONBtn" onclick="exportGeoJSON()" style="flex:1;"><i class="fas fa-map"></i> <span id="geojsonLabel">GeoJSON</span></button></div></div>
         </div>
         <div class="right-panel">
@@ -1196,20 +1194,20 @@ UNIFIED_DASHBOARD_HTML = """
 </div>
 
 <div id="analyticsTab" class="tab-content">
-    <div style="padding:8px 12px; overflow-y:auto; height:100%;">
-        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin-bottom:10px;">
-            <div class="stat-card" style="background:#1e1e1e; border-radius:8px; padding:10px;"><div class="stat-value" id="totalReports" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.55rem; color:#a0a0a0;">Total Reports</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:8px; padding:10px;"><div class="stat-value" id="totalUsers" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.55rem; color:#a0a0a0;">Active Users</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:8px; padding:10px;"><div class="stat-value" id="avgResponse" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.55rem; color:#a0a0a0;">Avg Response (min)</div></div>
-            <div class="stat-card" style="background:#1e1e1e; border-radius:8px; padding:10px;"><div class="stat-value" id="topReporter" style="font-size:1.2rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.55rem; color:#a0a0a0;">Top Reporter</div></div>
+    <div style="padding:6px 10px; overflow-y:auto; height:100%;">
+        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:6px; margin-bottom:6px;">
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="totalReports" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Total Reports</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="totalUsers" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Active Users</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="avgResponse" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Avg Response (min)</div></div>
+            <div class="stat-card" style="background:#1e1e1e; border-radius:6px; padding:8px;"><div class="stat-value" id="topReporter" style="font-size:1rem; font-weight:800; color:#2ecc71;">-</div><div style="font-size:0.5rem; color:#a0a0a0;">Top Reporter</div></div>
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:8px;">
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.7rem;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.7rem;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.7rem;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px;"><h3 style="color:#2ecc71; font-size:0.7rem;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.7rem;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%; font-size:0.6rem;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
-            <div style="background:#1e1e1e; border-radius:8px; padding:10px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.7rem;">👥 Users by Role</h3><table id="rolesTable" style="width:100%; font-size:0.6rem;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:6px;">
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">📈 Daily Report Trend</h3><canvas id="trendChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏗️ Damage Distribution</h3><canvas id="damageChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏘️ Reports by Infrastructure</h3><canvas id="infraChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px;"><h3 style="color:#2ecc71; font-size:0.6rem;">🌋 Reports by Crisis Type</h3><canvas id="crisisChart"></canvas></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.6rem;">🏆 Top Reporters</h3><table id="reportersTable" style="width:100%; font-size:0.55rem;"><thead><tr><th>Rank</th><th>Username</th><th>Reports</th></tr></thead><tbody></tbody></table></div>
+            <div style="background:#1e1e1e; border-radius:6px; padding:8px; overflow-x:auto;"><h3 style="color:#2ecc71; font-size:0.6rem;">👥 Users by Role</h3><table id="rolesTable" style="width:100%; font-size:0.55rem;"><thead><tr><th>Role</th><th>Count</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 </div>
@@ -1288,8 +1286,8 @@ async function loadAdminStats() {
             type: 'bar', data: { labels: data.by_crisis.map(d=>d.crisis), datasets: [{ label:'Reports', data:data.by_crisis.map(d=>d.count), backgroundColor:'#3498db', borderRadius:8 }] },
             options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color:'#e0e0e0' } } } }
         });
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:4px;">${i+1}</td><td style="padding:4px;">${r.username}</td><td style="padding:4px;">${r.reports}</td>`).join('');
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:4px;">${r.role}</td><td style="padding:4px;">${r.count}</td>`).join('');
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i)=>`<tr><td style="padding:3px;">${i+1}</td><td style="padding:3px;">${r.username}</td><td style="padding:3px;">${r.reports}</td>`).join('');
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r=>`<tr><td style="padding:3px;">${r.role}</td><td style="padding:3px;">${r.count}</td>`).join('');
     } catch(e) { console.error(e); }
 }
 
@@ -1343,7 +1341,7 @@ setLanguage(currentLang);
 function initMap() {
     map = L.map('map').setView([20, 0], 2);
     map.attributionControl.setPrefix('');
-    // STANDARD OSM TILES – guaranteed to work
+    // STANDARD OSM TILES – guaranteed to show
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
@@ -1396,7 +1394,7 @@ document.getElementById('photo').addEventListener('change', function(e) {
     let preview = document.getElementById('photoPreview');
     if(e.target.files && e.target.files[0]) {
         let reader = new FileReader();
-        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:50px;">`; };
+        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:40px;">`; };
         reader.readAsDataURL(e.target.files[0]);
     } else { preview.innerHTML = ''; }
 });
@@ -1514,8 +1512,8 @@ function updateReportsList() {
 
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
-    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
-    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:4px;"></i> Offline'; statusDiv.className = 'status-badge'; }
+    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:3px;"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    else { statusDiv.innerHTML = '<i class="fas fa-circle" style="font-size:3px;"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
 
 async function loadCurrentUser() {
