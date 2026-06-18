@@ -1,5 +1,5 @@
 # ============================================
-# UNIFIED DASHBOARD HTML – with visible brown border and green glow on active tabs
+# UNIFIED DASHBOARD HTML – with uniform header controls
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -56,11 +56,13 @@ UNIFIED_DASHBOARD_HTML = """
             flex-wrap: nowrap;
         }
 
-        /* ---- REDUCED, BLACK BOLD CONTROLS ---- */
+        /* ---- UNIFORM HEADER CONTROLS ---- */
         .sync-btn, .logout-btn, .lang-dropdown, .status-badge, .role-badge {
-            font-size: 0.7rem !important;
-            padding: 4px 10px !important;
+            height: 28px !important;               /* same height */
+            min-width: 60px !important;             /* consistent minimum width */
+            padding: 4px 12px !important;           /* identical padding */
             border-radius: 4px !important;
+            font-size: 0.7rem !important;
             font-weight: 700 !important;
             color: #000 !important;
             background: rgba(255,255,255,0.85) !important;
@@ -72,6 +74,7 @@ UNIFIED_DASHBOARD_HTML = """
             text-decoration: none !important;
             display: inline-flex !important;
             align-items: center !important;
+            justify-content: center !important;    /* center text/icon */
             gap: 4px !important;
         }
         .sync-btn:hover, .logout-btn:hover, .lang-dropdown:hover, .status-badge:hover, .role-badge:hover {
@@ -99,28 +102,32 @@ UNIFIED_DASHBOARD_HTML = """
             background: rgba(255,255,255,0.85) !important;
             color: #000 !important;
             border: 1px solid #ccc !important;
-            padding: 2px 6px !important;
+            padding: 2px 8px !important;
             font-size: 0.65rem !important;
+            min-width: 48px !important;
         }
         .role-badge {
             background: rgba(255,255,200,0.85) !important;
             color: #000 !important;
         }
 
-        /* ---- EXPORT BUTTONS IN HEADER – kept, but REDUCED ---- */
+        /* ---- EXPORT BUTTONS IN HEADER – uniform with others ---- */
         #headerExportGroup {
             display: inline-flex !important;
             gap: 4px;
             align-items: center;
         }
         #headerExportGroup .sync-btn {
-            font-size: 0.55rem !important;
-            padding: 2px 6px !important;
+            height: 26px !important;                /* slightly smaller but consistent */
+            min-width: 44px !important;
+            padding: 2px 8px !important;
+            font-size: 0.6rem !important;
             background: rgba(255,255,255,0.8) !important;
             border: 1px solid rgba(0,0,0,0.08) !important;
             border-radius: 3px !important;
             font-weight: 700 !important;
             color: #000 !important;
+            justify-content: center !important;
         }
         #headerExportGroup .sync-btn i {
             font-size: 0.7em !important;
@@ -141,11 +148,11 @@ UNIFIED_DASHBOARD_HTML = """
 
         .tabs-container {
             background: var(--bg-card);
-            padding: 0 16px 8px 16px;  /* added bottom padding for shadow */
+            padding: 0 16px 8px 16px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             gap: 6px;
-            overflow: visible; /* allow shadow to show */
+            overflow: visible;
         }
         .tab-btn {
             padding: 10px 24px;
@@ -163,10 +170,10 @@ UNIFIED_DASHBOARD_HTML = """
             background: var(--primary-muted);
         }
         .tab-btn.active {
-            color: #2ecc71;  /* bright green text for active */
-            border-bottom: 3px solid #8B4513;  /* thick brown border */
-            background: rgba(139,69,19,0.15);   /* subtle brown background */
-            box-shadow: 0 4px 20px rgba(46,204,113,0.6); /* strong green glow */
+            color: #2ecc71;
+            border-bottom: 3px solid #8B4513;
+            background: rgba(139,69,19,0.15);
+            box-shadow: 0 4px 20px rgba(46,204,113,0.6);
         }
 
         .kpi-row {
@@ -541,7 +548,7 @@ UNIFIED_DASHBOARD_HTML = """
         <div id="connectionStatus" class="status-badge status-online"><i class="fas fa-circle"></i> Online</div>
         <button class="sync-btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
         <span id="userRoleBadge" class="role-badge"></span>
-        <!-- Export options – now visible but reduced in size -->
+        <!-- Export options – uniform and reduced -->
         <span id="headerExportGroup" style="display:none; gap:4px; align-items:center;">
             <button class="sync-btn" onclick="exportCSV()" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
             <button class="sync-btn" onclick="exportGeoJSON()" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
