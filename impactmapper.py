@@ -687,7 +687,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 64px HEADER, OSM MAP, GLOWING BUTTONS
+# UNIFIED DASHBOARD HTML – with OSM basemap fixed
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -845,7 +845,7 @@ UNIFIED_DASHBOARD_HTML = """
         .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
         .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .map-container { flex: 1; position: relative; }
-        #map { height: 100%; width: 100%; }
+        #map { height: 100%; width: 100%; min-height: 300px; background: #1a1a1a; }  /* FIXED */
 
         .card {
             background: rgba(42, 42, 42, 0.9);
@@ -1319,7 +1319,6 @@ async function loadAdminStats() {
 }
 
 function updateCommandCenterCharts() {
-    // This function is called after reports are loaded – it uses the `reports` array
     const damageCounts = { minimal:0, partial:0, complete:0 };
     for(let r of reports) { if(r.damage_level==='minimal') damageCounts.minimal++; else if(r.damage_level==='partial') damageCounts.partial++; else if(r.damage_level==='complete') damageCounts.complete++; }
     if(pieChart) pieChart.destroy();
@@ -1366,15 +1365,70 @@ document.getElementById('languageSelect').value = currentLang;
 document.getElementById('languageSelect').addEventListener('change', (e) => setLanguage(e.target.value));
 setLanguage(currentLang);
 
+// ================================================================
+// FIXED MAP INITIALIZATION (OSM basemap with fallback & layer control)
+// ================================================================
 function initMap() {
-    map = L.map('map').setView([20, 0], 2);
+    const container = document.getElementById('map');
+    if (!container) return;
+
+    // Ensure container has a height
+    if (container.offsetHeight === 0) {
+        container.style.height = '400px';
+    }
+
+    map = L.map('map', {
+        center: [20, 0],
+        zoom: 2,
+        zoomControl: true,
+        fadeAnimation: true,
+    });
     map.attributionControl.setPrefix('');
-    // STANDARD OSM TILES – guaranteed to show
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+    // Primary OSM layer
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
-    }).addTo(map);
-    
+    });
+
+    // Fallback (different subdomain pattern)
+    const osmFallback = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OSM',
+        maxZoom: 19,
+    });
+
+    // Additional OSM styles for layer switcher
+    const cycleLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+        attribution: '&copy; OSM | CycleOSM',
+        maxZoom: 19,
+    });
+    const humanitarianLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: '&copy; OSM | Humanitarian',
+        maxZoom: 19,
+    });
+
+    // Add primary layer
+    osmLayer.addTo(map);
+
+    // On tile error, switch to fallback
+    osmLayer.on('tileerror', function() {
+        map.removeLayer(osmLayer);
+        osmFallback.addTo(map);
+    });
+
+    // Layer control
+    const baseLayers = {
+        "Standard": osmLayer,
+        "Cycle": cycleLayer,
+        "Humanitarian": humanitarianLayer
+    };
+    L.control.layers(baseLayers).addTo(map);
+
+    // Invalidate size after layout settles
+    setTimeout(() => map.invalidateSize(), 300);
+    window.addEventListener('resize', () => map.invalidateSize());
+
+    // ----- MAP CLICK HANDLER -----
     map.on('click', async function(e) {
         let lat = e.latlng.lat, lng = e.latlng.lng;
         document.getElementById('lat').value = lat.toFixed(6);
@@ -1393,6 +1447,8 @@ function initMap() {
         if(currentMarker) map.removeLayer(currentMarker);
         currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Selected location').openPopup();
     });
+
+    window.map = map; // make global
 }
 
 function shareLocation() {
@@ -1481,7 +1537,7 @@ async function loadReports() {
         updateReportsList();
         updateConnectionStatus(true);
         updateKPIs();
-        updateCommandCenterCharts(); // <-- charts update here with the fetched data
+        updateCommandCenterCharts();
     } catch(e) {
         reports = offlineQueue.map(r=>({...r,is_offline:true}));
         updateReportsList();
@@ -1588,9 +1644,9 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
-    let msg = 'Pending reports to sync:\n';
-    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
-    msg += '\nClick OK to sync now.';
+    let msg = 'Pending reports to sync:\\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\\n`; });
+    msg += '\\nClick OK to sync now.';
     if(confirm(msg)) forceSync();
 });
 
@@ -1615,16 +1671,20 @@ if(urgentElement && urgentElement.parentElement && urgentElement.parentElement.p
 window.addEventListener('online', () => { updateConnectionStatus(true); syncOfflineReports(); loadReports(); showToast('Back online!'); updateKPIs(); updateCommandCenterCharts(); });
 window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('Offline – reports saved locally.'); });
 
-updateConnectionStatus(navigator.onLine);
-initMap();
-loadCurrentUser();
-loadReports();
-loadLeaderboard();
-loadStats();
-setInterval(() => loadReports(), 30000);
-setInterval(() => updateKPIs(), 10000);
-setInterval(() => updateCommandCenterCharts(), 15000);
-setInterval(() => loadLeaderboard(), 10000);
+// ================================================================
+// STARTUP: ensure DOM is ready before initializing map & data
+// ================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    initMap();
+    loadCurrentUser();
+    loadReports();
+    loadLeaderboard();
+    loadStats();
+    setInterval(() => loadReports(), 30000);
+    setInterval(() => updateKPIs(), 10000);
+    setInterval(() => updateCommandCenterCharts(), 15000);
+    setInterval(() => loadLeaderboard(), 10000);
+});
 
 // ================================================================
 // CHAT - LOCAL ONLY (no WebSocket)
@@ -1648,13 +1708,11 @@ function sendLocalChatMessage() {
     input.value = '';
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const sendBtn = document.getElementById('chatSendBtn');
-    const input = document.getElementById('chatInput');
-    if (sendBtn) sendBtn.addEventListener('click', sendLocalChatMessage);
-    if (input) input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') sendLocalChatMessage();
-    });
+const chatSendBtn = document.getElementById('chatSendBtn');
+const chatInput = document.getElementById('chatInput');
+if (chatSendBtn) chatSendBtn.addEventListener('click', sendLocalChatMessage);
+if (chatInput) chatInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendLocalChatMessage();
 });
 
 // ================================================================
