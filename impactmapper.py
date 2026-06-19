@@ -793,7 +793,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED
+# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED, ROBUST CHARTS
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1610,7 +1610,7 @@ UNIFIED_DASHBOARD_HTML = """
 
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
-            <!-- ===== CHARTS SECTION - 50/50 WITH MAP ===== -->
+            <!-- ===== CHARTS SECTION - 50/50 WITH MAP, ROBUST ===== -->
             <div class="charts-section" id="chartsSection">
                 <div class="charts-title">
                     📊 DAMAGE ANALYTICS DASHBOARD
@@ -1815,36 +1815,114 @@ async function loadAdminStats() {
     }
 }
 
+// ============================================================
+// ROBUST CHARTS - Always render, fallback to placeholder values
+// ============================================================
 function updateCommandCenterCharts() {
-    const damageCounts = { minimal:0, partial:0, complete:0 };
-    for(let r of reports) { if(r.damage_level==='minimal') damageCounts.minimal++; else if(r.damage_level==='partial') damageCounts.partial++; else if(r.damage_level==='complete') damageCounts.complete++; }
-    if(pieChart) pieChart.destroy();
-    pieChart = new Chart(document.getElementById('pieChart'), {
-        type:'pie', data:{ labels:['Minimal','Partial','Complete'], datasets:[{ data:[damageCounts.minimal,damageCounts.partial,damageCounts.complete], backgroundColor:['#2ecc71','#f39c12','#e74c3c'] }] },
-        options:{ responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10, weight:'bold' }, color:'#000' } } } }
-    });
-    const infraCounts = {}; for(let r of reports) { let t=r.infrastructure_type||'Unknown'; infraCounts[t]=(infraCounts[t]||0)+1; }
-    const infraLabels = Object.keys(infraCounts).slice(0,6);
-    const infraData = infraLabels.map(l=>infraCounts[l]);
-    if(barChart) barChart.destroy();
-    barChart = new Chart(document.getElementById('barChart'), {
-        type:'bar', data:{ labels:infraLabels, datasets:[{ label:'Reports', data:infraData, backgroundColor:'#3498db', borderRadius:6 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:10} }, ticks:{ color:'#000', font:{size:10} } }, x:{ ticks:{ color:'#000', font:{size:10} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:10} } } } }
-    });
-    const dailyCounts = {}; for(let r of reports) { let d = new Date(r.timestamp).toISOString().split('T')[0]; dailyCounts[d]=(dailyCounts[d]||0)+1; }
-    const last7Days = []; for(let i=6;i>=0;i--) { let d=new Date(); d.setDate(d.getDate()-i); last7Days.push(d.toISOString().split('T')[0]); }
-    const lineData = last7Days.map(d=>dailyCounts[d]||0);
-    if(lineChart) lineChart.destroy();
-    lineChart = new Chart(document.getElementById('lineChart'), {
-        type:'line', data:{ labels:last7Days.map(d=>d.slice(5)), datasets:[{ label:'Reports per Day', data:lineData, borderColor:'#2ecc71', backgroundColor:'rgba(46,204,113,0.1)', fill:true, tension:0.4 }] },
-        options:{ responsive:true, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Count', color:'#000', font:{size:10} }, ticks:{ color:'#000', font:{size:10} } }, x:{ ticks:{ color:'#000', font:{size:10} } } }, plugins:{ legend:{ labels:{ color:'#000', font:{size:10} } } } }
-    });
+    try {
+        const damageCounts = { minimal: 0, partial: 0, complete: 0 };
+        reports.forEach(r => {
+            if (r.damage_level === 'minimal') damageCounts.minimal++;
+            else if (r.damage_level === 'partial') damageCounts.partial++;
+            else if (r.damage_level === 'complete') damageCounts.complete++;
+        });
 
-    setTimeout(() => {
-        if (pieChart) pieChart.resize();
-        if (barChart) barChart.resize();
-        if (lineChart) lineChart.resize();
-    }, 100);
+        // Pie chart
+        if (pieChart) pieChart.destroy();
+        const pieCtx = document.getElementById('pieChart');
+        if (pieCtx) {
+            pieChart = new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Minimal', 'Partial', 'Complete'],
+                    datasets: [{
+                        data: [damageCounts.minimal || 1, damageCounts.partial || 1, damageCounts.complete || 1],
+                        backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        // Bar chart - infrastructure
+        const infraCounts = {};
+        reports.forEach(r => {
+            const t = r.infrastructure_type || 'Unknown';
+            infraCounts[t] = (infraCounts[t] || 0) + 1;
+        });
+        const infraLabels = Object.keys(infraCounts).slice(0, 6);
+        const infraData = infraLabels.map(l => infraCounts[l] || 0);
+        if (barChart) barChart.destroy();
+        const barCtx = document.getElementById('barChart');
+        if (barCtx) {
+            if (infraLabels.length) {
+                barChart = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: infraLabels,
+                        datasets: [{
+                            label: 'Reports',
+                            data: infraData,
+                            backgroundColor: '#3498db'
+                        }]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                });
+            } else {
+                // Fallback: show "No Data"
+                barChart = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['No Data'],
+                        datasets: [{ label: 'Reports', data: [0], backgroundColor: '#888' }]
+                    },
+                    options: { responsive: true }
+                });
+            }
+        }
+
+        // Line chart - daily trend
+        const dailyCounts = {};
+        reports.forEach(r => {
+            const d = new Date(r.timestamp).toISOString().split('T')[0];
+            dailyCounts[d] = (dailyCounts[d] || 0) + 1;
+        });
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            last7Days.push(d.toISOString().split('T')[0]);
+        }
+        const lineData = last7Days.map(d => dailyCounts[d] || 0);
+        if (lineChart) lineChart.destroy();
+        const lineCtx = document.getElementById('lineChart');
+        if (lineCtx) {
+            lineChart = new Chart(lineCtx, {
+                type: 'line',
+                data: {
+                    labels: last7Days.map(d => d.slice(5)),
+                    datasets: [{
+                        label: 'Reports per Day',
+                        data: lineData,
+                        borderColor: '#2ecc71',
+                        fill: true,
+                        backgroundColor: 'rgba(46,204,113,0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        setTimeout(() => {
+            if (pieChart) pieChart.resize();
+            if (barChart) barChart.resize();
+            if (lineChart) lineChart.resize();
+        }, 200);
+
+    } catch (e) {
+        console.error('Chart error:', e);
+    }
 }
 
 async function setLanguage(lang) {
