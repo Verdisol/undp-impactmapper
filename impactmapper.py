@@ -793,7 +793,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – FULLY UPDATED
+# UNIFIED DASHBOARD HTML – 50/50 SPLIT, HEADER FIXED
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -814,6 +814,7 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
+        /* ===== HEADER FIX: never disappears ===== */
         .system-bar {
             background: #1a472a;
             padding: 8px 40px !important;
@@ -824,6 +825,8 @@ UNIFIED_DASHBOARD_HTML = """
             min-height: 90px !important;
             height: 90px !important;
             flex-shrink: 0;
+            position: relative;
+            z-index: 1000;
         }
         .brand-center {
             flex: 1;
@@ -950,6 +953,8 @@ UNIFIED_DASHBOARD_HTML = """
             gap: 6px;
             overflow: visible;
             flex-shrink: 0;
+            position: relative;
+            z-index: 999;
         }
         .tab-btn {
             padding: 12px 28px;
@@ -1012,20 +1017,21 @@ UNIFIED_DASHBOARD_HTML = """
         .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
 
+        /* ===== 50/50 SPLIT: sidebar and right panel each take half ===== */
         .main-layout {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
         .sidebar {
-            width: 420px;
+            flex: 1;                    /* takes 50% */
             background: var(--bg-sidebar);
             overflow-y: auto !important;
             padding: 20px;
             border-right: 1px solid var(--border-color);
             transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
-            flex-shrink: 0;
             height: 100%;
+            min-width: 0;
             scrollbar-width: thin;
             scrollbar-color: #2ecc71 #1a1a1a;
         }
@@ -1046,10 +1052,11 @@ UNIFIED_DASHBOARD_HTML = """
             border-right: none;
         }
         .right-panel {
-            flex: 1;
+            flex: 1;                    /* takes the other 50% */
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-width: 0;
         }
         .map-container {
             flex: 1;
@@ -1425,13 +1432,14 @@ UNIFIED_DASHBOARD_HTML = """
                 height: auto !important;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
+                flex: none;
             }
             .sidebar.collapsed {
                 max-height: 0;
                 padding: 0;
                 border-bottom: none;
             }
-            .right-panel { height: 70vh; }
+            .right-panel { height: 70vh; flex: none; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
             .chat-panel { width: 300px !important; }
