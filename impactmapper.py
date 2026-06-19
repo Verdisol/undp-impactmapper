@@ -793,7 +793,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – HEADER FIXED WITH STICKY
+# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -958,7 +958,7 @@ UNIFIED_DASHBOARD_HTML = """
             position: sticky;
             top: 90px; /* just below the system bar */
             z-index: 9999;
-            background: #1a1a1a; /* match dark theme */
+            background: #1a1a1a;
         }
         .tab-btn {
             padding: 12px 28px;
@@ -987,7 +987,7 @@ UNIFIED_DASHBOARD_HTML = """
             flex-direction: column;
             flex: 1;
             overflow: hidden;
-            margin-top: 0; /* no extra margin needed because header is sticky */
+            margin-top: 0;
         }
         .kpi-row {
             display: grid;
@@ -1063,20 +1063,70 @@ UNIFIED_DASHBOARD_HTML = """
             overflow: hidden;
             min-width: 0;
             position: relative;
-            z-index: 1; /* keep map below header */
+            z-index: 1;
         }
+
+        /* ===== 50/50 MAP & CHARTS inside right panel ===== */
         .map-container {
             flex: 1;
-            min-height: 150px;
+            min-height: 0;
             position: relative;
             z-index: 1;
         }
         #map {
             height: 100%;
             width: 100%;
-            min-height: 300px;
+            min-height: 0;
             background: #1a1a1a;
             z-index: 1;
+        }
+        .charts-section {
+            flex: 1;
+            min-height: 0;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(5px);
+            padding: 12px 18px 18px 18px;
+            margin: 8px 10px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .charts-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            flex: 1;
+            min-height: 0;
+            margin-top: 10px;
+        }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 0;
+        }
+        .chart-container h4 {
+            text-align: center;
+            margin-bottom: 4px;
+            color: #1a1a1a;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 120px;
         }
 
         /* ===== BIGGER FONTS (increased ~40%) ===== */
@@ -1201,44 +1251,6 @@ UNIFIED_DASHBOARD_HTML = """
         }
         .leaderboard-item:hover { background: rgba(46,204,113,0.1); }
         .rank { width: 28px; font-weight: 700; color: #f39c12; }
-
-        /* ===== CHARTS SECTION - ALWAYS VISIBLE, NO TOGGLE ===== */
-        .charts-section {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(5px);
-            padding: 12px 18px 18px 18px;
-            margin: 8px 10px;
-            border-radius: 12px;
-            transition: none;
-            flex-shrink: 0;
-            height: 220px;
-            overflow: hidden;
-            display: block !important;
-        }
-        .charts-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1a1a1a;
-            text-align: center;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-        }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-top: 10px;
-        }
-        .chart-container {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 8px;
-            padding: 12px;
-            min-height: 130px;
-        }
-        .chart-container h4 { text-align: center; margin-bottom: 6px; color: #1a1a1a; font-size: 0.85rem; }
-        canvas { max-height: 110px; width: 100% !important; height: auto !important; }
 
         .chat-panel {
             position: fixed !important;
@@ -1468,9 +1480,8 @@ UNIFIED_DASHBOARD_HTML = """
                 padding: 2px 8px !important;
                 height: 28px !important;
             }
-            .charts-section { height: 180px; }
             .charts-grid { grid-template-columns: 1fr; gap: 8px; }
-            .chart-container { min-height: 100px; }
+            .chart-container { min-height: 80px; }
         }
     </style>
 </head>
@@ -1599,7 +1610,7 @@ UNIFIED_DASHBOARD_HTML = """
 
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
-            <!-- ===== CHARTS SECTION - ALWAYS VISIBLE ===== -->
+            <!-- ===== CHARTS SECTION - 50/50 WITH MAP ===== -->
             <div class="charts-section" id="chartsSection">
                 <div class="charts-title">
                     📊 DAMAGE ANALYTICS DASHBOARD
@@ -2075,9 +2086,6 @@ async function loadCurrentUser() {
     } catch(e) { console.error('Auth error',e); }
 }
 
-// ============================================================
-// FIXED: Leaderboard with try-catch (silences fetch error)
-// ============================================================
 async function loadLeaderboard() {
     try {
         let res = await fetch('/api/leaderboard');
@@ -2212,7 +2220,7 @@ if (chatInput) chatInput.addEventListener('keydown', function(e) {
     });
 })();
 
-// ===== TOGGLE SIDEBAR (KEPT, CHARTS TOGGLE REMOVED) =====
+// ===== TOGGLE SIDEBAR =====
 document.addEventListener('DOMContentLoaded', function() {
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('sidebarPanel');
