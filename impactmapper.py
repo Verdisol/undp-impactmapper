@@ -793,7 +793,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 50/50 SPLIT, HEADER FIXED
+# UNIFIED DASHBOARD HTML – HEADER FIXED WITH STICKY
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -814,7 +814,7 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ===== HEADER FIX: never disappears ===== */
+        /* ===== HEADER FIX: stays on top with sticky ===== */
         .system-bar {
             background: #1a472a;
             padding: 8px 40px !important;
@@ -825,8 +825,10 @@ UNIFIED_DASHBOARD_HTML = """
             min-height: 90px !important;
             height: 90px !important;
             flex-shrink: 0;
-            position: relative;
-            z-index: 1000;
+            position: sticky;
+            top: 0;
+            z-index: 10000;
+            width: 100%;
         }
         .brand-center {
             flex: 1;
@@ -953,8 +955,10 @@ UNIFIED_DASHBOARD_HTML = """
             gap: 6px;
             overflow: visible;
             flex-shrink: 0;
-            position: relative;
-            z-index: 999;
+            position: sticky;
+            top: 90px; /* just below the system bar */
+            z-index: 9999;
+            background: #1a1a1a; /* match dark theme */
         }
         .tab-btn {
             padding: 12px 28px;
@@ -983,6 +987,7 @@ UNIFIED_DASHBOARD_HTML = """
             flex-direction: column;
             flex: 1;
             overflow: hidden;
+            margin-top: 0; /* no extra margin needed because header is sticky */
         }
         .kpi-row {
             display: grid;
@@ -1057,17 +1062,21 @@ UNIFIED_DASHBOARD_HTML = """
             flex-direction: column;
             overflow: hidden;
             min-width: 0;
+            position: relative;
+            z-index: 1; /* keep map below header */
         }
         .map-container {
             flex: 1;
             min-height: 150px;
             position: relative;
+            z-index: 1;
         }
         #map {
             height: 100%;
             width: 100%;
             min-height: 300px;
             background: #1a1a1a;
+            z-index: 1;
         }
 
         /* ===== BIGGER FONTS (increased ~40%) ===== */
