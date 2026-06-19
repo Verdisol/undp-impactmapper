@@ -1,40 +1,446 @@
+import asyncio
+import csv
+import hashlib
+import io
+import json
+import os
+import urllib.parse
+import urllib.request
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import Dict, List
+
+import asyncpg
+import uvicorn
+from fastapi import (Depends, FastAPI, File, Form, HTTPException, UploadFile,
+                     WebSocket, WebSocketDisconnect)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+# ============================================
+# PHOTO STORAGE (Vercel uses /tmp)
+# ============================================
+PHOTOS_DIR = "/tmp/photos"
+os.makedirs(PHOTOS_DIR, exist_ok=True)
+
+security = HTTPBasic()
+
+# ============================================
+# DATABASE (lazy connections, no pool)
+# ============================================
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable not set")
+
+async def get_db_conn():
+    return await asyncpg.connect(DATABASE_URL)
+
+async def ensure_tables():
+    conn = await get_db_conn()
+    try:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id SERIAL PRIMARY KEY,
+                report_uuid TEXT UNIQUE NOT NULL,
+                building_id TEXT,
+                building_osm_id TEXT,
+                building_name TEXT,
+                building_address TEXT,
+                damage_level TEXT,
+                version INTEGER DEFAULT 1,
+                photo_path TEXT,
+                lat REAL,
+                lng REAL,
+                location_text TEXT,
+                infrastructure_type TEXT,
+                crisis_nature TEXT,
+                debris TEXT,
+                notes TEXT,
+                username TEXT,
+                timestamp TEXT,
+                is_current INTEGER DEFAULT 1,
+                synced INTEGER DEFAULT 1,
+                sms_number TEXT
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'viewer',
+                avatar TEXT DEFAULT '🌍',
+                color TEXT DEFAULT '#2ecc71',
+                points INTEGER DEFAULT 0,
+                verified_reports INTEGER DEFAULT 0,
+                badge_level TEXT DEFAULT 'Citizen Reporter',
+                created_at TEXT,
+                phone_number TEXT
+            )
+        """)
+        default_users = [
+            ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin", "👑", "#e74c3c", 5000, 250, "🏆 Master Responder", "+1234567890"),
+            ("reporter", hashlib.sha256("report123".encode()).hexdigest(), "reporter", "📸", "#2ecc71", 1250, 65, "⭐ Senior Responder", "+1234567891"),
+            ("viewer", hashlib.sha256("view123".encode()).hexdigest(), "viewer", "👁️", "#3498db", 0, 0, "🆕 Citizen Reporter", ""),
+        ]
+        for user in default_users:
+            await conn.execute("""
+                INSERT INTO users (username, password_hash, role, avatar, color, points, verified_reports, badge_level, created_at, phone_number)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (username) DO NOTHING
+            """, *user + (datetime.now().isoformat(),))
+    finally:
+        await conn.close()
+
+_db_initialized = False
+async def init_db_once():
+    global _db_initialized
+    if not _db_initialized:
+        await ensure_tables()
+        _db_initialized = True
+
+# ============================================
+# CREATE FASTAPI APP with lifespan
+# ============================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await init_db_once()
+        print("✅ Database connected and tables verified.")
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+    yield
+
+app = FastAPI(title="UNDP ImpactMapper", version="28.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================
+# WEBSOCKET MANAGER (Chat + Online users)
+# ============================================
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[WebSocket, str] = {}
+        self.messages: List[dict] = []
+
+    async def connect(self, websocket: WebSocket, username: str):
+        await websocket.accept()
+        self.active_connections[websocket] = username
+        for msg in self.messages[-50:]:
+            await websocket.send_text(json.dumps(msg))
+        await self.broadcast_online_count()
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            del self.active_connections[websocket]
+        asyncio.create_task(self.broadcast_online_count())
+
+    async def broadcast(self, message: dict):
+        self.messages.append(message)
+        if len(self.messages) > 200:
+            self.messages = self.messages[-200:]
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(message))
+            except:
+                pass
+
+    async def broadcast_online_count(self):
+        count = len(self.active_connections)
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps({"type": "online", "count": count}))
+            except:
+                pass
+
+manager = ConnectionManager()
+
+# ============================================
+# OSM BUILDING LOOKUP
+# ============================================
+def get_building_at_location(lat: float, lng: float):
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json];
+        (
+          way["building"](around:10,{lat},{lng});
+          relation["building"](around:10,{lat},{lng});
+        );
+        out body;
+        >;
+        out skel qt;
+        """
+        params = urllib.parse.urlencode({'data': query}).encode()
+        req = urllib.request.Request(overpass_url, data=params, headers={'User-Agent': 'UNDP-ImpactMapper/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            for element in data.get("elements", []):
+                if element.get("type") in ["way", "relation"]:
+                    tags = element.get("tags", {})
+                    return {
+                        "osm_id": f"{element['type']}/{element['id']}",
+                        "name": tags.get("name", ""),
+                        "building_type": tags.get("building", "yes"),
+                        "address": f"{tags.get('addr:street', '')} {tags.get('addr:housenumber', '')}".strip()
+                    }
+    except Exception as e:
+        print(f"OSM lookup error: {e}")
+    return None
+
+# ============================================
+# DATABASE FUNCTIONS
+# ============================================
+async def save_report(report_uuid: str, building_id: str, building_osm_id: str, building_name: str, building_address: str,
+                damage_level: str, lat: float, lng: float, location_text: str, photo_path: str,
+                infrastructure_type: str, crisis_nature: str, debris: str, notes: str, username: str, synced: int = 1, sms_number: str = ""):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        await conn.execute("""
+            INSERT INTO reports (report_uuid, building_id, building_osm_id, building_name, building_address,
+                                damage_level, version, lat, lng, location_text, photo_path,
+                                infrastructure_type, crisis_nature, debris, notes, username, timestamp, is_current, synced, sms_number)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        """, report_uuid, building_id, building_osm_id, building_name, building_address,
+           damage_level, 1, lat, lng, location_text, photo_path,
+           infrastructure_type, crisis_nature, debris, notes, username, datetime.now().isoformat(), 1, synced, sms_number)
+    finally:
+        await conn.close()
+
+async def get_reports_db(limit: int = 200):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, damage_level, lat, lng, location_text, infrastructure_type,
+                   building_name, building_address, crisis_nature, debris,
+                   notes, timestamp, username, photo_path
+            FROM reports WHERE is_current = 1 ORDER BY timestamp DESC LIMIT $1
+        """, limit)
+        return [{
+            "report_uuid": r[0], "damage_level": r[1], "lat": r[2], "lng": r[3],
+            "location_text": r[4] or "", "infrastructure_type": r[5],
+            "building_name": r[6] or "", "building_address": r[7] or "",
+            "crisis_nature": r[8], "debris": r[9],
+            "notes": r[10] or "", "timestamp": r[11], "username": r[12],
+            "photo_url": f"/photos/{os.path.basename(r[13])}" if r[13] else None
+        } for r in rows]
+    finally:
+        await conn.close()
+
+async def get_leaderboard_db(limit: int = 15):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("SELECT username, points, verified_reports, badge_level, avatar, color FROM users ORDER BY points DESC LIMIT $1", limit)
+        return [{"username": r[0], "points": r[1], "verified_reports": r[2], "badge": r[3], "avatar": r[4], "color": r[5]} for r in rows]
+    finally:
+        await conn.close()
+
+async def update_user_points(username: str, points_increment: int = 10):
+    conn = await get_db_conn()
+    try:
+        await conn.execute("UPDATE users SET points = points + $1, verified_reports = verified_reports + 1 WHERE username = $2", points_increment, username)
+    finally:
+        await conn.close()
+
+async def get_user_by_username(username: str):
+    conn = await get_db_conn()
+    try:
+        return await conn.fetchrow("SELECT password_hash, role, avatar, color, points, badge_level FROM users WHERE username = $1", username)
+    finally:
+        await conn.close()
+
+async def get_stats_db():
+    conn = await get_db_conn()
+    try:
+        total = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE is_current = 1")
+        today = datetime.now().date().isoformat()
+        today_count = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE DATE(timestamp) = $1 AND is_current = 1", today)
+        pending = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE synced = 0")
+        return {"total_reports": total, "today_reports": today_count, "pending_sync": pending}
+    finally:
+        await conn.close()
+
+async def get_analytics():
+    conn = await get_db_conn()
+    try:
+        damage = await conn.fetch("SELECT damage_level, COUNT(*) as cnt FROM reports WHERE is_current = 1 GROUP BY damage_level")
+        infra = await conn.fetch("SELECT infrastructure_type, COUNT(*) as cnt FROM reports WHERE is_current = 1 AND infrastructure_type IS NOT NULL AND infrastructure_type != '' GROUP BY infrastructure_type ORDER BY cnt DESC LIMIT 10")
+        crisis = await conn.fetch("SELECT crisis_nature, COUNT(*) as cnt FROM reports WHERE is_current = 1 AND crisis_nature IS NOT NULL AND crisis_nature != '' GROUP BY crisis_nature ORDER BY cnt DESC LIMIT 10")
+        trend = await conn.fetch("SELECT DATE(timestamp::timestamp) as date, COUNT(*) as cnt FROM reports WHERE is_current = 1 AND timestamp::timestamp >= (NOW() - INTERVAL '30 days') GROUP BY DATE(timestamp::timestamp) ORDER BY date ASC")
+        return {
+            "damage": [{"label": r["damage_level"] or "Unknown", "count": r["cnt"]} for r in damage],
+            "infra": [{"label": r["infrastructure_type"], "count": r["cnt"]} for r in infra],
+            "crisis": [{"label": r["crisis_nature"], "count": r["cnt"]} for r in crisis],
+            "trend": [{"date": r["date"].isoformat(), "count": r["cnt"]} for r in trend]
+        }
+    finally:
+        await conn.close()
+
+# ============================================
+# AUTHENTICATION
+# ============================================
+async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
+    await init_db_once()
+    row = await get_user_by_username(credentials.username)
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+    if password_hash != row[0]:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"username": credentials.username, "role": row[1], "avatar": row[2], "color": row[3], "points": row[4], "badge": row[5]}
+
+def require_admin(current_user = Depends(verify_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+def require_reporter(current_user = Depends(verify_user)):
+    if current_user["role"] not in ["admin", "reporter"]:
+        raise HTTPException(status_code=403, detail="Reporter access required")
+    return current_user
+
+# ============================================
+# LANGUAGES
+# ============================================
+LANGUAGES = {
+    "en": {
+        "name": "English", "flag": "🇬🇧",
+        "report_damage": "Report Damage", "damage_level": "Damage Level",
+        "minimal": "Minimal/No Damage", "partial": "Partially Damaged",
+        "complete": "Completely Damaged", "infrastructure": "Infrastructure Type",
+        "residential": "Residential", "commercial": "Commercial",
+        "government": "Government", "utility": "Utility",
+        "transport": "Transport", "community": "Community",
+        "public": "Public", "crisis": "Crisis Type",
+        "earthquake": "Earthquake", "flood": "Flood",
+        "tsunami": "Tsunami", "hurricane": "Hurricane",
+        "wildfire": "Wildfire", "explosion": "Explosion",
+        "conflict": "Conflict", "debris": "Debris?",
+        "yes": "Yes", "no": "No", "submit": "Submit Report",
+        "gps_location": "Use My GPS", "building_name": "Building Name",
+        "photo": "Upload Photo", "notes": "Additional Notes",
+        "recent_reports": "Recent Reports", "export_data": "Export Data",
+        "export_csv": "Export CSV", "export_geojson": "Export GeoJSON",
+        "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams",
+        "online_users": "Online", "leaderboard": "Leaderboard",
+        "chat": "Crisis Chat", "type_message": "Type a message...",
+        "send": "Send", "click_building": "🏢 Click on any building on the map to select it!",
+        "total_reports": "Total Reports", "today_reports": "Today",
+        "pending_sync": "Pending Sync", "logout": "Logout",
+        "sync_now": "Sync Now", "sms_report": "SMS Report",
+        "sms_placeholder": "Format: DAMAGE LAT LNG",
+        "sms_send": "Send SMS Report", "command_center": "Command Center",
+        "analytics": "Analytics Dashboard"
+    },
+    "fr": {
+        "name": "Français", "flag": "🇫🇷",
+        "report_damage": "Signaler des dégâts", "damage_level": "Niveau de dégât",
+        "minimal": "Minime/Aucun dégât", "partial": "Partiellement endommagé",
+        "complete": "Complètement endommagé", "infrastructure": "Type d'infrastructure",
+        "residential": "Résidentiel", "commercial": "Commercial",
+        "government": "Gouvernement", "utility": "Service public",
+        "transport": "Transport", "community": "Communautaire",
+        "public": "Public", "crisis": "Type de crise",
+        "earthquake": "Tremblement de terre", "flood": "Inondation",
+        "tsunami": "Tsunami", "hurricane": "Ouragan",
+        "wildfire": "Feu de forêt", "explosion": "Explosion",
+        "conflict": "Conflit", "debris": "Débris?",
+        "yes": "Oui", "no": "Non", "submit": "Soumettre le rapport",
+        "gps_location": "Utiliser mon GPS", "building_name": "Nom du bâtiment",
+        "photo": "Télécharger une photo", "notes": "Notes supplémentaires",
+        "recent_reports": "Rapports récents", "export_data": "Exporter les données",
+        "export_csv": "Exporter CSV", "export_geojson": "Exporter GeoJSON",
+        "active_volunteers": "Volontaires actifs", "rescue_teams": "Équipes de secours",
+        "online_users": "En ligne", "leaderboard": "Classement",
+        "chat": "Chat de crise", "type_message": "Tapez un message...",
+        "send": "Envoyer", "click_building": "🏢 Cliquez sur un bâtiment sur la carte pour le sélectionner !",
+        "total_reports": "Total des rapports", "today_reports": "Aujourd'hui",
+        "pending_sync": "En attente de synchronisation", "logout": "Déconnexion",
+        "sync_now": "Synchroniser maintenant", "sms_report": "Rapport SMS",
+        "sms_placeholder": "Format: DEGAT LAT LNG", "sms_send": "Envoyer rapport SMS",
+        "command_center": "Centre de commandement", "analytics": "Tableau de bord analytique"
+    }
+}
+
+# ============================================
+# LOGIN PAGE (YOUR ORIGINAL DESIGN)
+# ============================================
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNDP ImpactMapper - Login</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+ .login-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); width: 100%; max-width: 400px; }
+  h2 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+  input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+  button { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+  button:hover { background: #219a52; }
+ .demo { text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <h2>UNDP ImpactMapper</h2>
+  <p style="text-align:center; color:#7f8c8d;">Sign in to continue</p>
+  <input type="text" id="username" placeholder="Username" value="admin">
+  <input type="password" id="password" placeholder="Password" value="admin123">
+  <button onclick="login()">Login</button>
+  <div class="demo">
+    Demo: admin/admin123<br>
+    reporter/report123<br>
+    viewer/view123
+  </div>
+</div>
+<script>
+async function login() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const credentials = btoa(username + ':' + password);
+
+  try {
+    const res = await fetch('/api/current_user', {
+      headers: { 'Authorization': 'Basic ' + credentials }
+    });
+    if (res.ok) {
+      window.location.href = '/dashboard';
+    } else {
+      alert('Invalid credentials');
+    }
+  } catch (e) {
+    alert('Login failed');
+  }
+}
+</script>
+</body>
+</html>
+"""
+
+# ============================================
+# DASHBOARD HTML - WITH ROLE-BASED SPLIT VIEW
+# ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNDP ImpactMapper - Command Center</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; overflow: hidden; }
-        body { font-family: 'Inter', sans-serif; background: #121212; color: #e0e0e0; }
-        .leaflet-control-attribution { display: none !important; }
-        .leaflet-bottom.leaflet-right { display: none !important; }
-
-        .system-bar {
-            background: #1a472a;
-            padding: 8px 40px !important;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #2ecc71;
-            min-height: 90px !important;
-            height: 90px !important;
-            flex-shrink: 0;
-        }
-        .brand-center {
-            flex: 1;
-            text-align: center;
-        }
-        .brand-center h1 {
-            font-size: 1.6rem !important;
-            font-weight: 700;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>UNDP ImpactMapper - Command Center</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dis            font-weight: 700;
             color: white;
             letter-spacing: 0.5px;
             margin: 0;
