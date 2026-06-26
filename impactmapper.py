@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends, Request
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -20,8 +20,6 @@ import asyncpg
 PHOTOS_DIR = "/tmp/photos"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-security = HTTPBasic()
-
 # ============================================
 # DATABASE (lazy connections, no pool)
 # ============================================
@@ -30,7 +28,8 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable not set")
 
 async def get_db_conn():
-    return await asyncpg.connect(DATABASE_URL)
+    # Add a timeout to avoid hanging on Vercel
+    return await asyncpg.connect(DATABASE_URL, timeout=10)
 
 async def ensure_tables():
     conn = await get_db_conn()
@@ -106,9 +105,18 @@ async def lifespan(app: FastAPI):
         print("✅ Database connected and tables verified.")
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
+        # We don't re-raise so the app continues (but will fail on DB requests)
     yield
 
 app = FastAPI(title="UNDP ImpactMapper", version="27.0.0", lifespan=lifespan)
+
+# Session middleware – uses a signed cookie (no popup)
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    print("⚠️ SECRET_KEY not set, using a default (change this for production)")
+    SECRET_KEY = "change-this-secret-key-in-production"
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -310,24 +318,20 @@ async def get_admin_stats(days: int = 30):
         await conn.close()
 
 # ============================================
-# AUTHENTICATION
+# SESSION-BASED AUTHENTICATION (no popup)
 # ============================================
-async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
-    await init_db_once()
-    row = await get_user_by_username(credentials.username)
-    if not row:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
-    if password_hash != row[0]:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"username": credentials.username, "role": row[1], "avatar": row[2], "color": row[3], "points": row[4], "badge": row[5]}
+async def get_current_user(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
 
-def require_admin(current_user: dict = Depends(verify_user)):
+def require_admin(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-def require_reporter(current_user: dict = Depends(verify_user)):
+def require_reporter(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["admin", "reporter"]:
         raise HTTPException(status_code=403, detail="Reporter access required")
     return current_user
@@ -346,16 +350,43 @@ LANGUAGES = {
 async def login_page():
     return HTMLResponse(LOGIN_HTML)
 
+@app.post("/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    row = await get_user_by_username(username)
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    if password_hash != row[0]:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    request.session["user"] = {
+        "username": username,
+        "role": row[1],
+        "avatar": row[2],
+        "color": row[3],
+        "points": row[4],
+        "badge": row[5]
+    }
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/")
+
 @app.get("/dashboard")
-async def unified_dashboard(current_user: dict = Depends(verify_user)):
+async def unified_dashboard(current_user: dict = Depends(get_current_user)):
     return HTMLResponse(UNIFIED_DASHBOARD_HTML)
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 @app.get("/api/lang/{lang}")
 async def get_language(lang: str):
     return LANGUAGES.get(lang, LANGUAGES["en"])
 
 @app.get("/api/current_user")
-async def get_current_user(current_user: dict = Depends(verify_user)):
+async def get_current_user_api(current_user: dict = Depends(get_current_user)):
     return current_user
 
 @app.get("/api/leaderboard")
@@ -369,6 +400,7 @@ async def get_building_info(lat: float, lng: float):
 
 @app.post("/api/report")
 async def create_report(
+    request: Request,
     damage_level: str = Form(...),
     infrastructure_type: str = Form(...),
     building_name: str = Form(""),
@@ -462,7 +494,7 @@ async def sync_offline_reports(reports_data: List[Dict], current_user: dict = De
     return {"synced": synced_count}
 
 @app.get("/api/reports")
-async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
+async def get_reports(limit: int = 200, current_user: dict = Depends(get_current_user)):
     return await get_reports_db(limit)
 
 @app.get("/api/reports/geojson")
@@ -518,7 +550,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML
+# LOGIN HTML (with form, no fetch)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -683,6 +715,7 @@ LOGIN_HTML = """
         .partner-logos { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
         .partner { font-size: 14px; opacity: 0.6; transition: all 0.3s ease; cursor: pointer; }
         .partner:hover { opacity: 1; transform: scale(1.1); }
+        .error-msg { color: #e74c3c; font-size: 13px; margin-top: 12px; text-align: center; }
         @media (max-width: 968px) {
             .container { padding: 20px 30px; }
             .hero-section { flex-direction: column; }
@@ -734,10 +767,14 @@ LOGIN_HTML = """
                 <div class="login-card">
                     <h2>Access Unified Dashboard</h2>
                     <p>Login to access Command Center & Analytics</p>
-                    <div class="input-group"><input type="text" id="username" placeholder="Username"></div>
-                    <div class="input-group"><input type="password" id="password" placeholder="Password"></div>
-                    <button class="login-btn" onclick="login()">🔐 Login to ImpactMapper</button>
-                    <div id="errorMsg" style="color:#e74c3c; font-size:12px; margin-top:12px; text-align:center;"></div>
+                    <form method="post" action="/login">
+                        <div class="input-group"><input type="text" name="username" placeholder="Username" required></div>
+                        <div class="input-group"><input type="password" name="password" placeholder="Password" required></div>
+                        <button type="submit" class="login-btn">🔐 Login to ImpactMapper</button>
+                    </form>
+                    {% if error %}
+                    <div class="error-msg">{{ error }}</div>
+                    {% endif %}
                     <div class="demo-info">
                         <p>Demo Accounts:</p>
                         <div class="demo-badge">
@@ -764,28 +801,10 @@ LOGIN_HTML = """
     <script>
         document.getElementById('currentYear').innerText = new Date().getFullYear();
         const langSelect = document.getElementById('languageSelect');
-        async function setLanguage(lang) { try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {} }
-        langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('errorMsg');
-            if (!username || !password) { errorDiv.innerText = 'Please enter username and password'; return; }
-            try {
-                const response = await fetch('/dashboard', { headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) } });
-                if (response.ok) {
-                    window.location.href = '/dashboard';
-                } else {
-                    const text = await response.text();
-                    console.error('Login failed:', response.status, text);
-                    errorDiv.innerText = 'Invalid credentials (status ' + response.status + ')';
-                }
-            } catch(e) {
-                errorDiv.innerText = 'Login failed: ' + e.message;
-                console.error(e);
-            }
+        async function setLanguage(lang) {
+            try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {}
         }
-        document.getElementById('password').addEventListener('keypress', function(e) { if (e.key === 'Enter') login(); });
+        langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
         setLanguage('en');
     </script>
 </body>
@@ -793,10 +812,16 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED, ROBUST CHARTS
+# UNIFIED DASHBOARD HTML – (same as before, but we keep it short for space)
 # ============================================
-UNIFIED_DASHBOARD_HTML = """
-<!DOCTYPE html>
+# Since the full HTML is extremely long, I'm placing the same content as earlier.
+# For brevity, I'll assume you have the full UNIFIED_DASHBOARD_HTML variable from previous versions.
+# In a real deployment, you would paste the entire string here.
+# I will include a placeholder that actually contains the full HTML.
+# To avoid exceeding the message length, I'll put a note.
+# But the user needs the full code, so I'll include it.
+
+UNIFIED_DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -814,7 +839,6 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ===== HEADER FIX: stays on top with sticky ===== */
         .system-bar {
             background: #1a472a;
             padding: 8px 40px !important;
@@ -956,7 +980,7 @@ UNIFIED_DASHBOARD_HTML = """
             overflow: visible;
             flex-shrink: 0;
             position: sticky;
-            top: 90px; /* just below the system bar */
+            top: 90px;
             z-index: 9999;
             background: #1a1a1a;
         }
@@ -1022,14 +1046,13 @@ UNIFIED_DASHBOARD_HTML = """
         .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
 
-        /* ===== 50/50 SPLIT: sidebar and right panel each take half ===== */
         .main-layout {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
         .sidebar {
-            flex: 1;                    /* takes 50% */
+            flex: 1;
             background: var(--bg-sidebar);
             overflow-y: auto !important;
             padding: 20px;
@@ -1057,7 +1080,7 @@ UNIFIED_DASHBOARD_HTML = """
             border-right: none;
         }
         .right-panel {
-            flex: 1;                    /* takes the other 50% */
+            flex: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -1066,7 +1089,6 @@ UNIFIED_DASHBOARD_HTML = """
             z-index: 1;
         }
 
-        /* ===== 50/50 MAP & CHARTS inside right panel ===== */
         .map-container {
             flex: 1;
             min-height: 0;
@@ -1129,7 +1151,6 @@ UNIFIED_DASHBOARD_HTML = """
             max-height: 120px;
         }
 
-        /* ===== BIGGER FONTS (increased ~40%) ===== */
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
@@ -1507,7 +1528,7 @@ UNIFIED_DASHBOARD_HTML = """
         <button class="sync-btn" id="toggleSidebarBtn" title="Toggle Report Panel"><i class="fas fa-chevron-left"></i></button>
         <button id="exportCSVBtn" class="sync-btn" onclick="exportCSV()" style="display:none;" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
         <button id="exportGeoJSONBtn" class="sync-btn" onclick="exportGeoJSON()" style="display:none;" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
-        <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 </div>
 <div class="tabs-container">
@@ -1815,9 +1836,6 @@ async function loadAdminStats() {
     }
 }
 
-// ============================================================
-// ROBUST CHARTS - Always render, fallback to placeholder values
-// ============================================================
 function updateCommandCenterCharts() {
     try {
         const damageCounts = { minimal: 0, partial: 0, complete: 0 };
@@ -1827,7 +1845,6 @@ function updateCommandCenterCharts() {
             else if (r.damage_level === 'complete') damageCounts.complete++;
         });
 
-        // Pie chart
         if (pieChart) pieChart.destroy();
         const pieCtx = document.getElementById('pieChart');
         if (pieCtx) {
@@ -1844,7 +1861,6 @@ function updateCommandCenterCharts() {
             });
         }
 
-        // Bar chart - infrastructure
         const infraCounts = {};
         reports.forEach(r => {
             const t = r.infrastructure_type || 'Unknown';
@@ -1869,7 +1885,6 @@ function updateCommandCenterCharts() {
                     options: { responsive: true, scales: { y: { beginAtZero: true } } }
                 });
             } else {
-                // Fallback: show "No Data"
                 barChart = new Chart(barCtx, {
                     type: 'bar',
                     data: {
@@ -1881,7 +1896,6 @@ function updateCommandCenterCharts() {
             }
         }
 
-        // Line chart - daily trend
         const dailyCounts = {};
         reports.forEach(r => {
             const d = new Date(r.timestamp).toISOString().split('T')[0];
@@ -2142,6 +2156,10 @@ function updateConnectionStatus(isOnline) {
 async function loadCurrentUser() {
     try {
         let res = await fetch('/api/current_user');
+        if (!res.ok) {
+            console.warn('Not authenticated');
+            return;
+        }
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
@@ -2235,7 +2253,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(() => loadLeaderboard(), 10000);
 });
 
-// ===== CHAT =====
 function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
     if (!container) return;
@@ -2260,7 +2277,6 @@ if (chatInput) chatInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') sendLocalChatMessage();
 });
 
-// ===== DRAG CHAT =====
 (function initDragChat() {
     const container = document.getElementById('glowChat');
     const header = document.getElementById('chatDragHandle');
@@ -2298,7 +2314,6 @@ if (chatInput) chatInput.addEventListener('keydown', function(e) {
     });
 })();
 
-// ===== TOGGLE SIDEBAR =====
 document.addEventListener('DOMContentLoaded', function() {
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('sidebarPanel');
@@ -2312,8 +2327,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 # ============================================
 # VERCEL SERVERLESS HANDLER
