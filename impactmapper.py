@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends, Cookie
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from contextlib import asynccontextmanager
-from itsdangerous import URLSafeSerializer
 import uvicorn
 import os
 import json
@@ -20,11 +20,7 @@ import asyncpg
 PHOTOS_DIR = "/tmp/photos"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-# ============================================
-# COOKIE SIGNING
-# ============================================
-SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-in-production-please")
-serializer = URLSafeSerializer(SECRET_KEY)
+security = HTTPBasic()
 
 # ============================================
 # DATABASE (lazy connections, no pool)
@@ -229,6 +225,9 @@ async def get_stats_db():
     finally:
         await conn.close()
 
+# ============================================
+# ADMIN STATS (FIXED with timestamp casting)
+# ============================================
 async def get_admin_stats(days: int = 30):
     await init_db_once()
     conn = await get_db_conn()
@@ -311,47 +310,30 @@ async def get_admin_stats(days: int = 30):
         await conn.close()
 
 # ============================================
-# AUTHENTICATION (cookie-based, NO POPUP)
+# AUTHENTICATION
 # ============================================
-async def get_current_user(session: Optional[str] = Cookie(None)):
-    """Return user dict if valid session, else None."""
-    if not session:
-        return None
-    try:
-        data = serializer.loads(session)
-        if datetime.fromisoformat(data["expires"]) < datetime.utcnow():
-            return None
-        user_row = await get_user_by_username(data["username"])
-        if not user_row:
-            return None
-        return {
-            "username": data["username"],
-            "role": user_row[1],
-            "avatar": user_row[2],
-            "color": user_row[3],
-            "points": user_row[4],
-            "badge": user_row[5]
-        }
-    except Exception:
-        return None
+async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
+    await init_db_once()
+    row = await get_user_by_username(credentials.username)
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+    if password_hash != row[0]:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"username": credentials.username, "role": row[1], "avatar": row[2], "color": row[3], "points": row[4], "badge": row[5]}
 
-async def require_auth(current_user: Optional[dict] = Depends(get_current_user)):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return current_user
-
-def require_admin(current_user: dict = Depends(require_auth)):
+def require_admin(current_user: dict = Depends(verify_user)):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-def require_reporter(current_user: dict = Depends(require_auth)):
+def require_reporter(current_user: dict = Depends(verify_user)):
     if current_user["role"] not in ["admin", "reporter"]:
         raise HTTPException(status_code=403, detail="Reporter access required")
     return current_user
 
 # ============================================
-# LANGUAGES (unchanged)
+# LANGUAGES
 # ============================================
 LANGUAGES = {
     "en": {"name": "English", "flag": "🇬🇧", "report_damage": "Report Damage", "damage_level": "Damage Level", "minimal": "Minimal/No Damage", "partial": "Partially Damaged", "complete": "Completely Damaged", "infrastructure": "Infrastructure Type", "residential": "Residential", "commercial": "Commercial", "government": "Government", "utility": "Utility", "transport": "Transport", "community": "Community", "public": "Public", "crisis": "Crisis Type", "earthquake": "Earthquake", "flood": "Flood", "tsunami": "Tsunami", "hurricane": "Hurricane", "wildfire": "Wildfire", "explosion": "Explosion", "conflict": "Conflict", "debris": "Debris?", "yes": "Yes", "no": "No", "submit": "Submit Report", "gps_location": "Use My GPS", "building_name": "Building Name", "photo": "Upload Photo", "notes": "Additional Notes", "recent_reports": "Recent Reports", "export_data": "Export Data", "export_csv": "Export CSV", "export_geojson": "Export GeoJSON", "active_volunteers": "Active Volunteers", "rescue_teams": "Rescue Teams", "online_users": "Online", "leaderboard": "Leaderboard", "chat": "Crisis Chat", "type_message": "Type a message...", "send": "Send", "click_building": "🏢 Click on any building on the map to select it!", "total_reports": "Total Reports", "today_reports": "Today", "pending_sync": "Pending Sync", "logout": "Logout", "sync_now": "Sync Now", "sms_report": "SMS Report", "sms_placeholder": "Format: DAMAGE LAT LNG", "sms_send": "Send SMS Report", "command_center": "Command Center", "analytics": "Analytics Dashboard"},
@@ -364,36 +346,8 @@ LANGUAGES = {
 async def login_page():
     return HTMLResponse(LOGIN_HTML)
 
-@app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
-    user_row = await get_user_by_username(username)
-    if not user_row or hashlib.sha256(password.encode()).hexdigest() != user_row[0]:
-        return RedirectResponse("/?error=Invalid+credentials", status_code=303)
-    session_data = serializer.dumps({
-        "username": username,
-        "expires": (datetime.utcnow() + timedelta(hours=24)).isoformat()
-    })
-    response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(
-        key="session",
-        value=session_data,
-        httponly=True,
-        secure=False,       # Set to True if using HTTPS
-        samesite="lax",
-        max_age=86400
-    )
-    return response
-
-@app.get("/logout")
-async def logout():
-    response = RedirectResponse(url="/")
-    response.delete_cookie("session")
-    return response
-
 @app.get("/dashboard")
-async def unified_dashboard(current_user: Optional[dict] = Depends(get_current_user)):
-    if not current_user:
-        return RedirectResponse("/")
+async def unified_dashboard(current_user: dict = Depends(verify_user)):
     return HTMLResponse(UNIFIED_DASHBOARD_HTML)
 
 @app.get("/api/lang/{lang}")
@@ -401,7 +355,7 @@ async def get_language(lang: str):
     return LANGUAGES.get(lang, LANGUAGES["en"])
 
 @app.get("/api/current_user")
-async def get_current_user_info(current_user: dict = Depends(require_auth)):
+async def get_current_user(current_user: dict = Depends(verify_user)):
     return current_user
 
 @app.get("/api/leaderboard")
@@ -508,7 +462,7 @@ async def sync_offline_reports(reports_data: List[Dict], current_user: dict = De
     return {"synced": synced_count}
 
 @app.get("/api/reports")
-async def get_reports(limit: int = 200, current_user: dict = Depends(require_auth)):
+async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
     return await get_reports_db(limit)
 
 @app.get("/api/reports/geojson")
@@ -564,7 +518,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML (now a form, no JavaScript fetch)
+# LOGIN HTML
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -720,7 +674,10 @@ LOGIN_HTML = """
             border-radius: 20px;
             font-size: 11px;
             color: #2ecc71;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
+        .demo-role:hover { background: rgba(46,204,113,0.3); transform: scale(1.05); }
         .footer { margin-top: auto; padding: 30px 0 20px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
         .footer p { font-size: 12px; color: #666; }
         .partner-logos { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -777,18 +734,16 @@ LOGIN_HTML = """
                 <div class="login-card">
                     <h2>Access Unified Dashboard</h2>
                     <p>Login to access Command Center & Analytics</p>
-                    <form action="/login" method="POST">
-                        <div class="input-group"><input type="text" name="username" placeholder="Username" required></div>
-                        <div class="input-group"><input type="password" name="password" placeholder="Password" required></div>
-                        <button type="submit" class="login-btn">🔐 Login to ImpactMapper</button>
-                    </form>
+                    <div class="input-group"><input type="text" id="username" placeholder="Username"></div>
+                    <div class="input-group"><input type="password" id="password" placeholder="Password"></div>
+                    <button class="login-btn" onclick="login()">🔐 Login to ImpactMapper</button>
                     <div id="errorMsg" style="color:#e74c3c; font-size:12px; margin-top:12px; text-align:center;"></div>
                     <div class="demo-info">
                         <p>Demo Accounts:</p>
                         <div class="demo-badge">
-                            <span class="demo-role">👑 admin / admin123</span>
-                            <span class="demo-role">📸 reporter / report123</span>
-                            <span class="demo-role">👁️ viewer / view123</span>
+                            <span class="demo-role">👑 admin / admin123 (Full Access + Analytics)</span>
+                            <span class="demo-role">📸 reporter / report123 (Submit reports)</span>
+                            <span class="demo-role">👁️ viewer / view123 (View only)</span>
                         </div>
                     </div>
                 </div>
@@ -808,18 +763,37 @@ LOGIN_HTML = """
     </div>
     <script>
         document.getElementById('currentYear').innerText = new Date().getFullYear();
-        const params = new URLSearchParams(window.location.search);
-        const error = params.get('error');
-        if (error) {
-            document.getElementById('errorMsg').innerText = error.replace(/\\+/g, ' ');
+        const langSelect = document.getElementById('languageSelect');
+        async function setLanguage(lang) { try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); } catch(e) {} }
+        langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMsg');
+            if (!username || !password) { errorDiv.innerText = 'Please enter username and password'; return; }
+            try {
+                const response = await fetch('/dashboard', { headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) } });
+                if (response.ok) {
+                    window.location.href = '/dashboard';
+                } else {
+                    const text = await response.text();
+                    console.error('Login failed:', response.status, text);
+                    errorDiv.innerText = 'Invalid credentials (status ' + response.status + ')';
+                }
+            } catch(e) {
+                errorDiv.innerText = 'Login failed: ' + e.message;
+                console.error(e);
+            }
         }
+        document.getElementById('password').addEventListener('keypress', function(e) { if (e.key === 'Enter') login(); });
+        setLanguage('en');
     </script>
 </body>
 </html>
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML (COMPLETE, with /logout)
+# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED, ROBUST CHARTS
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -1533,7 +1507,7 @@ UNIFIED_DASHBOARD_HTML = """
         <button class="sync-btn" id="toggleSidebarBtn" title="Toggle Report Panel"><i class="fas fa-chevron-left"></i></button>
         <button id="exportCSVBtn" class="sync-btn" onclick="exportCSV()" style="display:none;" title="Export CSV"><i class="fas fa-file-csv"></i> CSV</button>
         <button id="exportGeoJSONBtn" class="sync-btn" onclick="exportGeoJSON()" style="display:none;" title="Export GeoJSON"><i class="fas fa-map"></i> GeoJSON</button>
-        <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a href="/" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 </div>
 <div class="tabs-container">
@@ -2222,9 +2196,9 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
-    let msg = 'Pending reports to sync:\n';
-    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
-    msg += '\nClick OK to sync now.';
+    let msg = 'Pending reports to sync:\\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\\n`; });
+    msg += '\\nClick OK to sync now.';
     if(confirm(msg)) forceSync();
 });
 
