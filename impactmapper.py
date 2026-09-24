@@ -348,7 +348,7 @@ async def create_report(
         content = await photo.read()
         with open(photo_path, "wb") as f:
             f.write(content)
-    if lat and lng:
+    if lat is not None and lng is not None:
         building_id = f"bld_{lat}_{lng}"
     else:
         building_id = f"bld_txt_{hashlib.md5(text_location.encode()).hexdigest()[:10]}"
@@ -652,7 +652,7 @@ LOGIN_HTML = """
     <script>
         document.getElementById('currentYear').innerText = new Date().getFullYear();
         const langSelect = document.getElementById('languageSelect');
-        async function setLanguage(lang) { try { await fetch(`/api/lang/${lang}`); } catch(e) {} }
+        async function setLanguage(lang) { try { await fetch('/api/lang/' + encodeURIComponent(lang)); } catch(e) {} }
         langSelect.addEventListener('change', (e) => { setLanguage(e.target.value); });
         async function login() {
             const username = document.getElementById('username').value;
@@ -1047,6 +1047,15 @@ UNIFIED_DASHBOARD_HTML = """
 let map, markers = [], reports = [];
 let currentUser = { username: '', role: '', avatar: '', color: '#2ecc71', points: 0, badge: '' };
 let currentLang = localStorage.getItem('language') || 'en';
+
+function escapeHtml(value) {
+    const text = value == null ? '' : String(value);
+    return text.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;')
+               .replace(/"/g, '&quot;')
+               .replace(/'/g, '&#039;');
+}
 let translations = {};
 let offlineQueue = [];
 let isAdmin = false;
@@ -1081,7 +1090,7 @@ function switchTab(tab) {
 async function loadAdminStats() {
     const days = document.getElementById('analyticsDays').value;
     try {
-        const res = await fetch(`/api/admin/stats?days=${days}`);
+        const res = await fetch('/api/admin/stats?days=' + encodeURIComponent(days));
         const data = await res.json();
         document.getElementById('totalReports').innerHTML = data.total_reports || 0;
         document.getElementById('totalUsers').innerHTML = data.total_users || 0;
@@ -1122,7 +1131,7 @@ function updateCommandCenterCharts() {
 
 async function setLanguage(lang) {
     currentLang = lang; localStorage.setItem('language', lang);
-    try { const res = await fetch(`/api/lang/${lang}`); const data = await res.json(); translations = data; updateUITexts(); } catch(e) { console.error(e); }
+    try { const res = await fetch('/api/lang/' + encodeURIComponent(lang)); const data = await res.json(); translations = data; updateUITexts(); } catch(e) { console.error(e); }
 }
 function updateUITexts() {
     const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
@@ -1151,12 +1160,12 @@ function initMap() {
         document.getElementById('lat').value = lat.toFixed(6);
         document.getElementById('lng').value = lng.toFixed(6);
         try {
-            let res = await fetch(`/api/building/${lat}/${lng}`);
+            let res = await fetch('/api/building/' + encodeURIComponent(lat) + '/' + encodeURIComponent(lng));
             let building = await res.json();
             if(building && building.name) {
                 document.getElementById('buildingName').value = building.name;
                 document.getElementById('selectedBuildingInfo').style.display = 'block';
-                document.getElementById('selectedBuildingInfo').innerHTML = `🏢 ${building.name}<br>📍 ${building.address || 'Unknown'}`;
+                document.getElementById('selectedBuildingInfo').innerHTML = '🏢 ' + escapeHtml(building.name) + '<br>📍 ' + escapeHtml(building.address || 'Unknown');
             } else { document.getElementById('selectedBuildingInfo').style.display = 'none'; }
         } catch(err) { console.error(err); }
         if(currentMarker) map.removeLayer(currentMarker);
@@ -1188,11 +1197,12 @@ async function sendSMSReport() {
     } catch(e) { statusDiv.innerHTML = '❌ Failed'; }
 }
 
-document.getElementById('photo').addEventListener('change', function(e) {
+const photoInput = document.getElementById('photo');
+if (photoInput) photoInput.addEventListener('change', function(e) {
     let preview = document.getElementById('photoPreview');
     if(e.target.files && e.target.files[0]) {
         let reader = new FileReader();
-        reader.onload = function(ev) { preview.innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:80px;">`; };
+        reader.onload = function(ev) { preview.innerHTML = '<img src="' + ev.target.result + '" style="max-width:100%; max-height:80px;">'; };
         reader.readAsDataURL(e.target.files[0]);
     } else { preview.innerHTML = ''; }
 });
@@ -1289,7 +1299,7 @@ function updateMapMarkers() {
             if(r.damage_level==='partial') color='#f39c12';
             if(r.damage_level==='complete') color='#e74c3c';
             let marker = L.circleMarker([r.lat,r.lng], { radius:8, fillColor:color, color:'#fff', weight:2, fillOpacity:0.8 }).addTo(map);
-            marker.bindPopup(`<b>${r.building_name||'Building'}</b><br>${r.damage_level}`);
+            marker.bindPopup('<b>' + escapeHtml(r.building_name || 'Building') + '</b><br>' + escapeHtml(r.damage_level || '') + '');
             markers.push(marker);
         }
     }
@@ -1301,8 +1311,8 @@ function updateReportsList() {
     container.innerHTML = '';
     reports.slice(0,15).forEach(r => {
         let div = document.createElement('div');
-        div.className = `report-item ${r.damage_level==='complete'?'severity-critical':(r.damage_level==='partial'?'severity-high':'')}`;
-        div.innerHTML = `<strong>${r.building_name||'Location'}</strong><br>${r.infrastructure_type||''} - ${r.damage_level}`;
+        div.className = 'report-item ' + (r.damage_level === 'complete' ? 'severity-critical' : (r.damage_level === 'partial' ? 'severity-high' : ''));
+        div.innerHTML = '<strong>' + escapeHtml(r.building_name || 'Location') + '</strong><br>' + escapeHtml(r.infrastructure_type || '') + ' - ' + escapeHtml(r.damage_level || '');
         div.onclick = () => { if(r.lat && r.lng && map) map.setView([r.lat,r.lng],18); };
         container.appendChild(div);
     });
@@ -1321,7 +1331,7 @@ async function loadCurrentUser() {
         let res = await fetch('/api/current_user');
         let user = await res.json();
         currentUser = user;
-        document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
+        document.getElementById('userRoleBadge').textContent = (user.role || '') + ' ' + (user.points || 0) + ' pts';
         if(user.role === 'admin') {
             document.getElementById('exportCard').style.display = 'block';
             document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
@@ -1343,7 +1353,7 @@ async function loadLeaderboard() {
         let leaders = await res.json();
         let container = document.getElementById('leaderboardList');
         if (!container) return;
-        container.innerHTML = leaders.map((l,i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
+        container.innerHTML = leaders.map((l,i) => '<div class="leaderboard-item"><span class="rank">' + (i + 1) + '</span><span>' + escapeHtml(l.username || '') + '</span><span>🏆 ' + (l.points || 0) + '</span></div>').join('');
     } catch(e) { console.warn(e); }
 }
 
@@ -1358,7 +1368,7 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     if(offlineQueue.length === 0) { alert('No pending tasks.'); return; }
-    if(confirm(`Sync ${offlineQueue.length} pending reports?`)) forceSync();
+    if(confirm('Sync ' + offlineQueue.length + ' pending reports?')) forceSync();
 });
 
 window.addEventListener('online', () => { updateConnectionStatus(true); syncOfflineReports(); loadReports(); });
@@ -1368,9 +1378,9 @@ function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
     if (!container) return;
     const div = document.createElement('div');
-    div.className = `chat-message ${isOwn ? 'own' : 'other'}`;
+    div.className = 'chat-message ' + (isOwn ? 'own' : 'other');
     const time = new Date().toLocaleTimeString();
-    div.innerHTML = `<span class="msg-username">${username} <span class="msg-time">${time}</span></span>${message}`;
+    div.innerHTML = '<span class="msg-username">' + escapeHtml(username) + ' <span class="msg-time">' + escapeHtml(time) + '</span></span>' + escapeHtml(message);
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
