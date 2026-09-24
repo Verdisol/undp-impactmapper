@@ -35,6 +35,10 @@ async def get_db_conn():
 async def ensure_tables():
     conn = await get_db_conn()
     try:
+        # Enable PostGIS
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+        
+        # Reports table with geometry column
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS reports (
                 id SERIAL PRIMARY KEY,
@@ -48,6 +52,7 @@ async def ensure_tables():
                 photo_path TEXT,
                 lat REAL,
                 lng REAL,
+                geom geometry(Point, 4326),
                 location_text TEXT,
                 infrastructure_type TEXT,
                 crisis_nature TEXT,
@@ -60,6 +65,11 @@ async def ensure_tables():
                 sms_number TEXT
             )
         """)
+        
+        # Spatial index
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_geom ON reports USING GIST (geom)")
+        
+        # Users table
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -75,6 +85,7 @@ async def ensure_tables():
                 phone_number TEXT
             )
         """)
+        
         default_users = [
             ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "admin", "👑", "#e74c3c", 5000, 250, "🏆 Master Responder", "+1234567890"),
             ("reporter", hashlib.sha256("report123".encode()).hexdigest(), "reporter", "📸", "#2ecc71", 1250, 65, "⭐ Senior Responder", "+1234567891"),
@@ -160,10 +171,20 @@ async def save_report(report_uuid: str, building_id: str, building_osm_id: str, 
     conn = await get_db_conn()
     try:
         await conn.execute("""
-            INSERT INTO reports (report_uuid, building_id, building_osm_id, building_name, building_address,
-                                damage_level, version, lat, lng, location_text, photo_path,
-                                infrastructure_type, crisis_nature, debris, notes, username, timestamp, is_current, synced, sms_number)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            INSERT INTO reports (
+                report_uuid, building_id, building_osm_id, building_name, building_address,
+                damage_level, version, lat, lng, geom, location_text, photo_path,
+                infrastructure_type, crisis_nature, debris, notes, username,
+                timestamp, is_current, synced, sms_number
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                CASE WHEN $9 IS NOT NULL AND $8 IS NOT NULL AND $9 != 0 AND $8 != 0
+                     THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)
+                     ELSE NULL
+                END,
+                $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+            )
         """, report_uuid, building_id, building_osm_id, building_name, building_address,
            damage_level, 1, lat, lng, location_text, photo_path,
            infrastructure_type, crisis_nature, debris, notes, username, datetime.now().isoformat(), 1, synced, sms_number)
@@ -226,7 +247,7 @@ async def get_stats_db():
         await conn.close()
 
 # ============================================
-# ADMIN STATS (FIXED with timestamp casting)
+# ADMIN STATS
 # ============================================
 async def get_admin_stats(days: int = 30):
     await init_db_once()
@@ -444,15 +465,25 @@ async def sync_offline_reports(reports_data: List[Dict], current_user: dict = De
                 existing = await conn.fetchval("SELECT report_uuid FROM reports WHERE report_uuid = $1", report.get('report_uuid'))
                 if not existing:
                     await conn.execute("""
-                        INSERT INTO reports (report_uuid, building_id, damage_level, lat, lng, location_text,
-                                            infrastructure_type, building_name, crisis_nature, debris,
-                                            notes, username, timestamp, synced, is_current)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                        INSERT INTO reports (
+                            report_uuid, building_id, damage_level, lat, lng, geom,
+                            location_text, infrastructure_type, building_name,
+                            crisis_nature, debris, notes, username, timestamp,
+                            synced, is_current
+                        )
+                        VALUES (
+                            $1, $2, $3, $4, $5,
+                            CASE WHEN $5 IS NOT NULL AND $4 IS NOT NULL AND $5 != 0 AND $4 != 0
+                                 THEN ST_SetSRID(ST_MakePoint($5, $4), 4326)
+                                 ELSE NULL
+                            END,
+                            $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                        )
                     """, report.get('report_uuid'), report.get('building_id'), report.get('damage_level'),
-                        report.get('lat'), report.get('lng'), report.get('location_text'),
-                        report.get('infrastructure_type'), report.get('building_name'), report.get('crisis_nature'),
-                        report.get('debris'), report.get('notes'), current_user['username'],
-                        report.get('timestamp'), 1, 1)
+                        report.get('lat'), report.get('lng'),
+                        report.get('location_text'), report.get('infrastructure_type'), report.get('building_name'),
+                        report.get('crisis_nature'), report.get('debris'), report.get('notes'),
+                        current_user['username'], report.get('timestamp'), 1, 1)
                     synced_count += 1
                     await update_user_points(current_user['username'], 10)
             finally:
@@ -481,6 +512,117 @@ async def get_geojson(current_user: dict = Depends(require_reporter)):
                         "crisis_nature": r[4], "building_name": r[5], "timestamp": r[6]
                     }
                 })
+        return {"type": "FeatureCollection", "features": features}
+    finally:
+        await conn.close()
+
+# ============================================
+# SPATIAL ENDPOINTS (PostGIS)
+# ============================================
+
+@app.get("/api/spatial/nearest")
+async def nearest_reports(lat: float, lng: float, k: int = 5, current_user: dict = Depends(verify_user)):
+    """Find the K nearest reports to a point (KNN)."""
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, building_name, damage_level,
+                   ST_Distance(geom::geography,
+                               ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_m
+            FROM reports
+            WHERE is_current = 1 AND geom IS NOT NULL
+            ORDER BY geom <-> ST_SetSRID(ST_MakePoint($1, $2), 4326)
+            LIMIT $3
+        """, lng, lat, k)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+@app.get("/api/spatial/within")
+async def reports_within(lat: float, lng: float, radius_m: int = 500, current_user: dict = Depends(verify_user)):
+    """All reports within X meters of a point."""
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, building_name, damage_level,
+                   ST_Distance(geom::geography,
+                               ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_m
+            FROM reports
+            WHERE is_current = 1
+              AND ST_DWithin(geom::geography,
+                             ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+                             $3)
+            ORDER BY distance_m
+        """, lng, lat, radius_m)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+@app.get("/api/spatial/clusters")
+async def damage_clusters(eps_m: int = 100, min_points: int = 3, current_user: dict = Depends(verify_user)):
+    """DBSCAN-style damage clustering."""
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            WITH clustered AS (
+                SELECT report_uuid, damage_level, geom,
+                       ST_ClusterDBSCAN(geom, eps := $1 / 111320.0, minpoints := $2) OVER () AS cluster_id
+                FROM reports
+                WHERE is_current = 1 AND geom IS NOT NULL
+            )
+            SELECT cluster_id,
+                   COUNT(*) AS report_count,
+                   ST_Y(ST_Centroid(ST_Collect(geom))) AS center_lat,
+                   ST_X(ST_Centroid(ST_Collect(geom))) AS center_lng,
+                   SUM(CASE WHEN damage_level = 'complete' THEN 1 ELSE 0 END) AS complete_damage
+            FROM clustered
+            WHERE cluster_id IS NOT NULL
+            GROUP BY cluster_id
+            ORDER BY report_count DESC
+        """, eps_m, min_points)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+@app.get("/api/spatial/bbox")
+async def reports_in_bbox(min_lng: float, min_lat: float, max_lng: float, max_lat: float,
+                          current_user: dict = Depends(verify_user)):
+    """All reports within a bounding box."""
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, building_name, damage_level, lat, lng
+            FROM reports
+            WHERE is_current = 1
+              AND geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        """, min_lng, min_lat, max_lng, max_lat)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+@app.get("/api/reports/geojson_spatial")
+async def export_geojson_spatial(current_user: dict = Depends(require_reporter)):
+    """GeoJSON export with proper geometry — for QGIS."""
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT jsonb_build_object(
+                'type', 'Feature',
+                'geometry', ST_AsGeoJSON(geom)::jsonb,
+                'properties', jsonb_build_object(
+                    'report_uuid', report_uuid,
+                    'building_name', building_name,
+                    'damage_level', damage_level,
+                    'infrastructure_type', infrastructure_type,
+                    'crisis_nature', crisis_nature,
+                    'timestamp', timestamp,
+                    'username', username
+                )
+            ) AS feature
+            FROM reports
+            WHERE is_current = 1 AND geom IS NOT NULL
+        """)
+        features = [r["feature"] for r in rows]
         return {"type": "FeatureCollection", "features": features}
     finally:
         await conn.close()
@@ -518,7 +660,7 @@ async def serve_photo(filename: str):
     raise HTTPException(status_code=404, detail="Photo not found")
 
 # ============================================
-# LOGIN HTML
+# LOGIN HTML (unchanged)
 # ============================================
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -793,7 +935,7 @@ LOGIN_HTML = """
 """
 
 # ============================================
-# UNIFIED DASHBOARD HTML – 50/50 MAP/CHARTS, HEADER FIXED, ROBUST CHARTS
+# UNIFIED DASHBOARD HTML (unchanged from your version)
 # ============================================
 UNIFIED_DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -814,7 +956,6 @@ UNIFIED_DASHBOARD_HTML = """
         .leaflet-control-attribution { display: none !important; }
         .leaflet-bottom.leaflet-right { display: none !important; }
 
-        /* ===== HEADER FIX: stays on top with sticky ===== */
         .system-bar {
             background: #1a472a;
             padding: 8px 40px !important;
@@ -830,10 +971,7 @@ UNIFIED_DASHBOARD_HTML = """
             z-index: 10000;
             width: 100%;
         }
-        .brand-center {
-            flex: 1;
-            text-align: center;
-        }
+        .brand-center { flex: 1; text-align: center; }
         .brand-center h1 {
             font-size: 1.6rem !important;
             font-weight: 700;
@@ -869,7 +1007,6 @@ UNIFIED_DASHBOARD_HTML = """
             color: #000 !important;
             background: rgba(255,255,255,0.85) !important;
             border: 1px solid rgba(0,0,0,0.1) !important;
-            box-shadow: none !important;
             transition: 0.2s ease !important;
             white-space: nowrap !important;
             cursor: pointer !important;
@@ -884,68 +1021,12 @@ UNIFIED_DASHBOARD_HTML = """
             transform: scale(1.02);
             box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
         }
-        .logout-btn {
-            background: rgba(255, 200, 200, 0.9) !important;
-            color: #b00000 !important;
-        }
-        .logout-btn:hover {
-            background: #fff !important;
-            color: #d00 !important;
-        }
-        .status-badge {
-            background: rgba(200,255,200,0.85) !important;
-            color: #000 !important;
-        }
-        .status-badge i {
-            font-size: 8px !important;
-            color: #2ecc71 !important;
-        }
-        .lang-dropdown {
-            background: rgba(255,255,255,0.85) !important;
-            color: #000 !important;
-            border: 1px solid #ccc !important;
-            padding: 2px 10px !important;
-            font-size: 0.8rem !important;
-            min-width: 56px !important;
-        }
-        .role-badge {
-            background: rgba(255,255,200,0.85) !important;
-            color: #000 !important;
-        }
-
-        #exportCSVBtn, #exportGeoJSONBtn {
-            height: 30px !important;
-            min-width: 50px !important;
-            padding: 4px 10px !important;
-            font-size: 0.75rem !important;
-            background: rgba(255,255,255,0.8) !important;
-            border: 1px solid rgba(0,0,0,0.08) !important;
-            border-radius: 4px !important;
-            font-weight: 700 !important;
-            color: #000 !important;
-            justify-content: center !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            cursor: pointer !important;
-            transition: 0.2s ease !important;
-        }
-        #exportCSVBtn:hover, #exportGeoJSONBtn:hover {
-            background: #fff !important;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
-        }
-        #exportCSVBtn i, #exportGeoJSONBtn i {
-            font-size: 0.8em !important;
-        }
-
-        .sync-btn i, .logout-btn i, .status-badge i, .role-badge i {
-            font-size: 0.9em !important;
-        }
-
-        .status-online {
-            animation: none !important;
-            box-shadow: none !important;
-        }
+        .logout-btn { background: rgba(255, 200, 200, 0.9) !important; color: #b00000 !important; }
+        .logout-btn:hover { background: #fff !important; color: #d00 !important; }
+        .status-badge { background: rgba(200,255,200,0.85) !important; color: #000 !important; }
+        .status-badge i { font-size: 8px !important; color: #2ecc71 !important; }
+        .lang-dropdown { background: rgba(255,255,255,0.85) !important; color: #000 !important; border: 1px solid #ccc !important; padding: 2px 10px !important; font-size: 0.8rem !important; min-width: 56px !important; }
+        .role-badge { background: rgba(255,255,200,0.85) !important; color: #000 !important; }
 
         .tabs-container {
             background: var(--bg-card);
@@ -953,10 +1034,9 @@ UNIFIED_DASHBOARD_HTML = """
             border-bottom: 1px solid var(--border-color);
             display: flex;
             gap: 6px;
-            overflow: visible;
             flex-shrink: 0;
             position: sticky;
-            top: 90px; /* just below the system bar */
+            top: 90px;
             z-index: 9999;
             background: #1a1a1a;
         }
@@ -971,10 +1051,7 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .tab-btn:hover {
-            color: var(--primary);
-            background: var(--primary-muted);
-        }
+        .tab-btn:hover { color: var(--primary); background: var(--primary-muted); }
         .tab-btn.active {
             color: #2ecc71;
             border-bottom: 3px solid #8B4513;
@@ -1005,11 +1082,7 @@ UNIFIED_DASHBOARD_HTML = """
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .kpi-card:hover {
-            border-color: #27ae60;
-            transform: translateY(-2px);
-            box-shadow: 0 0 15px rgba(46,204,113,0.3);
-        }
+        .kpi-card:hover { border-color: #27ae60; transform: translateY(-2px); box-shadow: 0 0 15px rgba(46,204,113,0.3); }
         .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         .kpi-header span { font-size: 0.8rem; color: #a0a0a0; text-transform: uppercase; }
         .kpi-value { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
@@ -1022,14 +1095,9 @@ UNIFIED_DASHBOARD_HTML = """
         .pill-yellow { background: rgba(243,156,18,0.12); color: #f39c12; }
         .pill-green { background: rgba(46,204,113,0.12); color: #2ecc71; }
 
-        /* ===== 50/50 SPLIT: sidebar and right panel each take half ===== */
-        .main-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
         .sidebar {
-            flex: 1;                    /* takes 50% */
+            flex: 1;
             background: var(--bg-sidebar);
             overflow-y: auto !important;
             padding: 20px;
@@ -1040,46 +1108,14 @@ UNIFIED_DASHBOARD_HTML = """
             scrollbar-width: thin;
             scrollbar-color: #2ecc71 #1a1a1a;
         }
-        .sidebar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .sidebar::-webkit-scrollbar-track {
-            background: #1a1a1a;
-        }
-        .sidebar::-webkit-scrollbar-thumb {
-            background: #2ecc71;
-            border-radius: 10px;
-        }
-        .sidebar.collapsed {
-            width: 0;
-            padding: 0;
-            overflow: hidden;
-            border-right: none;
-        }
-        .right-panel {
-            flex: 1;                    /* takes the other 50% */
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            min-width: 0;
-            position: relative;
-            z-index: 1;
-        }
+        .sidebar::-webkit-scrollbar { width: 8px; }
+        .sidebar::-webkit-scrollbar-track { background: #1a1a1a; }
+        .sidebar::-webkit-scrollbar-thumb { background: #2ecc71; border-radius: 10px; }
+        .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
+        .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; z-index: 1; }
 
-        /* ===== 50/50 MAP & CHARTS inside right panel ===== */
-        .map-container {
-            flex: 1;
-            min-height: 0;
-            position: relative;
-            z-index: 1;
-        }
-        #map {
-            height: 100%;
-            width: 100%;
-            min-height: 0;
-            background: #1a1a1a;
-            z-index: 1;
-        }
+        .map-container { flex: 1; min-height: 0; position: relative; z-index: 1; }
+        #map { height: 100%; width: 100%; min-height: 0; background: #1a1a1a; z-index: 1; }
         .charts-section {
             flex: 1;
             min-height: 0;
@@ -1092,44 +1128,12 @@ UNIFIED_DASHBOARD_HTML = """
             flex-direction: column;
             overflow: hidden;
         }
-        .charts-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1a1a1a;
-            text-align: center;
-            flex-shrink: 0;
-        }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            flex: 1;
-            min-height: 0;
-            margin-top: 10px;
-        }
-        .chart-container {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 8px;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 0;
-        }
-        .chart-container h4 {
-            text-align: center;
-            margin-bottom: 4px;
-            color: #1a1a1a;
-            font-size: 0.8rem;
-            flex-shrink: 0;
-        }
-        canvas {
-            width: 100% !important;
-            height: auto !important;
-            max-height: 120px;
-        }
+        .charts-title { font-size: 1.1rem; font-weight: 700; color: #1a1a1a; text-align: center; flex-shrink: 0; }
+        .charts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; flex: 1; min-height: 0; margin-top: 10px; }
+        .chart-container { background: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+        .chart-container h4 { text-align: center; margin-bottom: 4px; color: #1a1a1a; font-size: 0.8rem; flex-shrink: 0; }
+        canvas { width: 100% !important; height: auto !important; max-height: 120px; }
 
-        /* ===== BIGGER FONTS (increased ~40%) ===== */
         .card {
             background: rgba(42, 42, 42, 0.9);
             backdrop-filter: blur(5px);
@@ -1138,117 +1142,25 @@ UNIFIED_DASHBOARD_HTML = """
             margin-bottom: 14px;
             border: 1px solid rgba(255,255,255,0.08);
         }
-        .card h3 {
-            color: #2ecc71;
-            margin-bottom: 10px;
-            font-size: 1.3rem !important;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .card label, .card p, .card .building-info, .card .sms-card, .card .reports-list {
-            font-size: 1.1rem !important;
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 10px;
-            margin: 6px 0;
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 8px;
-            color: white;
-            font-size: 1.1rem !important;
-        }
-        button {
-            background: linear-gradient(135deg, #1a472a, #0d2a1a);
-            color: white;
-            padding: 10px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 6px;
-            font-size: 1.1rem !important;
-        }
+        .card h3 { color: #2ecc71; margin-bottom: 10px; font-size: 1.3rem !important; display: flex; align-items: center; gap: 8px; }
+        input, select, textarea { width: 100%; padding: 10px; margin: 6px 0; background: #1a1a1a; border: 1px solid #444; border-radius: 8px; color: white; font-size: 1.1rem !important; }
+        button { background: linear-gradient(135deg, #1a472a, #0d2a1a); color: white; padding: 10px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 6px; font-size: 1.1rem !important; }
         .btn-location { background: linear-gradient(135deg, #3498db, #2980b9); }
-        .btn-photo { background: linear-gradient(135deg, #8e44ad, #6c3483); }
         .reports-list { max-height: 220px; overflow-y: auto; }
-        .report-item {
-            background: #1a1a1a;
-            padding: 10px 12px;
-            margin: 8px 0;
-            border-radius: 8px;
-            border-left: 4px solid #2ecc71;
-            cursor: pointer;
-            font-size: 1.0rem !important;
-        }
+        .report-item { background: #1a1a1a; padding: 10px 12px; margin: 8px 0; border-radius: 8px; border-left: 4px solid #2ecc71; cursor: pointer; font-size: 1.0rem !important; }
         .report-item.severity-critical { border-left-color: #e74c3c; }
         .report-item.severity-high { border-left-color: #f39c12; }
-        .building-info {
-            background: rgba(46,204,113,0.1);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 6px;
-            font-size: 1.0rem !important;
-            text-align: center;
-            cursor: pointer;
-            border: 1px solid rgba(46,204,113,0.3);
-            color: #2ecc71;
-        }
-        .sms-card {
-            background: rgba(46,204,113,0.08);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 6px;
-        }
+        .building-info { background: rgba(46,204,113,0.1); padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 1.0rem !important; text-align: center; cursor: pointer; border: 1px solid rgba(46,204,113,0.3); color: #2ecc71; }
+        .sms-card { background: rgba(46,204,113,0.08); padding: 10px; border-radius: 8px; margin-top: 6px; }
         .photo-preview { margin-top: 6px; text-align: center; }
         .photo-preview img { max-width: 100%; border-radius: 8px; max-height: 80px; }
-        .scroll-hint {
-            text-align: center;
-            font-size: 1.0rem !important;
-            color: #888;
-            margin: 10px 0;
-            animation: pulse-hint 1.5s ease-in-out infinite;
-        }
-        @keyframes pulse-hint {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 1; }
-        }
+        .scroll-hint { text-align: center; font-size: 1.0rem !important; color: #888; margin: 10px 0; animation: pulse-hint 1.5s ease-in-out infinite; }
+        @keyframes pulse-hint { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
-        .leaderboard-panel {
-            position: fixed;
-            bottom: 15px;
-            right: 15px;
-            width: 240px;
-            background: rgba(30,30,30,0.95);
-            backdrop-filter: blur(12px);
-            border-radius: 10px;
-            border: 1px solid rgba(243,156,18,0.2);
-            z-index: 1000;
-        }
-        .leaderboard-header {
-            padding: 10px 14px;
-            border-radius: 10px 10px 0 0;
-            display: flex;
-            justify-content: space-between;
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 600;
-            background: rgba(243,156,18,0.08);
-        }
+        .leaderboard-panel { position: fixed; bottom: 15px; right: 15px; width: 240px; background: rgba(30,30,30,0.95); backdrop-filter: blur(12px); border-radius: 10px; border: 1px solid rgba(243,156,18,0.2); z-index: 1000; }
+        .leaderboard-header { padding: 10px 14px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; cursor: pointer; font-size: 0.9rem; font-weight: 600; background: rgba(243,156,18,0.08); }
         .leaderboard-list { max-height: 150px; overflow-y: auto; padding: 8px; }
-        .leaderboard-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            border-radius: 6px;
-            margin: 4px 0;
-            background: rgba(255,255,255,0.02);
-            font-size: 0.85rem;
-            cursor: pointer;
-        }
+        .leaderboard-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; margin: 4px 0; background: rgba(255,255,255,0.02); font-size: 0.85rem; cursor: pointer; }
         .leaderboard-item:hover { background: rgba(46,204,113,0.1); }
         .rank { width: 28px; font-weight: 700; color: #f39c12; }
 
@@ -1275,196 +1187,35 @@ UNIFIED_DASHBOARD_HTML = """
             resize: both !important;
         }
         .chat-panel:hover { box-shadow: 0 0 35px rgba(0, 255, 200, 0.25), 0 0 70px rgba(0, 255, 200, 0.1) !important; }
-        @keyframes pulseGlowChat {
-            0% { box-shadow: 0 0 15px rgba(0,255,200,0.08), 0 0 30px rgba(0,255,200,0.04); }
-            100% { box-shadow: 0 0 35px rgba(0,255,200,0.25), 0 0 70px rgba(0,255,200,0.1); }
-        }
-        .chat-header {
-            padding: 10px 18px !important;
-            background: rgba(0,255,200,0.06) !important;
-            border-bottom: 1px solid rgba(0,255,200,0.08) !important;
-            border-radius: 18px 18px 0 0 !important;
-            cursor: grab !important;
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
-            flex-shrink: 0 !important;
-        }
+        @keyframes pulseGlowChat { 0% { box-shadow: 0 0 15px rgba(0,255,200,0.08), 0 0 30px rgba(0,255,200,0.04); } 100% { box-shadow: 0 0 35px rgba(0,255,200,0.25), 0 0 70px rgba(0,255,200,0.1); } }
+        .chat-header { padding: 10px 18px !important; background: rgba(0,255,200,0.06) !important; border-bottom: 1px solid rgba(0,255,200,0.08) !important; border-radius: 18px 18px 0 0 !important; cursor: grab !important; display: flex !important; justify-content: space-between !important; align-items: center !important; flex-shrink: 0 !important; }
         .chat-header:active { cursor: grabbing !important; }
-        .chat-header h4 {
-            color: #00ffcc !important;
-            font-size: 1.0rem !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.5px !important;
-            display: flex !important;
-            align-items: center !important;
-            gap: 8px !important;
-        }
-        .chat-header .pulse-dot {
-            display: inline-block !important;
-            width: 10px !important;
-            height: 10px !important;
-            background: #00ffcc !important;
-            border-radius: 50% !important;
-            box-shadow: 0 0 12px #00ffcc !important;
-            animation: blinkDotChat 1.2s infinite !important;
-        }
+        .chat-header h4 { color: #00ffcc !important; font-size: 1.0rem !important; font-weight: 700 !important; letter-spacing: 0.5px !important; display: flex !important; align-items: center !important; gap: 8px !important; }
+        .chat-header .pulse-dot { display: inline-block !important; width: 10px !important; height: 10px !important; background: #00ffcc !important; border-radius: 50% !important; box-shadow: 0 0 12px #00ffcc !important; animation: blinkDotChat 1.2s infinite !important; }
         @keyframes blinkDotChat { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
-        .chat-header .status-badge {
-            font-size: 0.8rem !important;
-            background: rgba(0,255,200,0.1) !important;
-            padding: 2px 12px !important;
-            border-radius: 30px !important;
-            color: #aaffee !important;
-            border: 1px solid rgba(0,255,200,0.08) !important;
-        }
-        .chat-messages {
-            flex: 1 !important;
-            padding: 10px 14px !important;
-            overflow-y: auto !important;
-            max-height: 260px !important;
-            min-height: 100px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 6px !important;
-            background: transparent !important;
-        }
+        .chat-header .status-badge { font-size: 0.8rem !important; background: rgba(0,255,200,0.1) !important; padding: 2px 12px !important; border-radius: 30px !important; color: #aaffee !important; border: 1px solid rgba(0,255,200,0.08) !important; }
+        .chat-messages { flex: 1 !important; padding: 10px 14px !important; overflow-y: auto !important; max-height: 260px !important; min-height: 100px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; background: transparent !important; }
         .chat-messages::-webkit-scrollbar { width: 6px; }
         .chat-messages::-webkit-scrollbar-thumb { background: #00ffcc; border-radius: 10px; }
-        .chat-message {
-            padding: 8px 14px !important;
-            border-radius: 14px !important;
-            max-width: 85% !important;
-            font-size: 0.9rem !important;
-            line-height: 1.4 !important;
-        }
-        .chat-message.own {
-            align-self: flex-end !important;
-            background: rgba(0,255,200,0.15) !important;
-            border: 1px solid rgba(0,255,200,0.12) !important;
-            color: #e0faf5 !important;
-            border-bottom-right-radius: 3px !important;
-        }
-        .chat-message.other {
-            align-self: flex-start !important;
-            background: rgba(255,255,255,0.04) !important;
-            border: 1px solid rgba(255,255,255,0.04) !important;
-            color: #cdd9e6 !important;
-            border-bottom-left-radius: 3px !important;
-        }
+        .chat-message { padding: 8px 14px !important; border-radius: 14px !important; max-width: 85% !important; font-size: 0.9rem !important; line-height: 1.4 !important; }
+        .chat-message.own { align-self: flex-end !important; background: rgba(0,255,200,0.15) !important; border: 1px solid rgba(0,255,200,0.12) !important; color: #e0faf5 !important; border-bottom-right-radius: 3px !important; }
+        .chat-message.other { align-self: flex-start !important; background: rgba(255,255,255,0.04) !important; border: 1px solid rgba(255,255,255,0.04) !important; color: #cdd9e6 !important; border-bottom-left-radius: 3px !important; }
         .chat-message .msg-username { font-weight: 700 !important; color: #00ffcc !important; font-size: 0.8rem !important; display: block !important; margin-bottom: 2px !important; }
         .chat-message .msg-time { font-size: 0.7rem !important; opacity: 0.4 !important; margin-left: 8px !important; }
-        .chat-input-area {
-            padding: 8px 14px 14px 14px !important;
-            border-top: 1px solid rgba(0,255,200,0.06) !important;
-            display: flex !important;
-            gap: 8px !important;
-            align-items: center !important;
-            flex-shrink: 0 !important;
-            background: transparent !important;
-        }
-        .chat-input-area input {
-            flex: 1 !important;
-            padding: 8px 14px !important;
-            border-radius: 30px !important;
-            border: 1px solid rgba(0,255,200,0.08) !important;
-            background: rgba(0,0,0,0.35) !important;
-            color: #fff !important;
-            font-size: 0.85rem !important;
-            outline: none !important;
-        }
+        .chat-input-area { padding: 8px 14px 14px 14px !important; border-top: 1px solid rgba(0,255,200,0.06) !important; display: flex !important; gap: 8px !important; align-items: center !important; flex-shrink: 0 !important; background: transparent !important; }
+        .chat-input-area input { flex: 1 !important; padding: 8px 14px !important; border-radius: 30px !important; border: 1px solid rgba(0,255,200,0.08) !important; background: rgba(0,0,0,0.35) !important; color: #fff !important; font-size: 0.85rem !important; outline: none !important; }
         .chat-input-area input:focus { border-color: #00ffcc !important; box-shadow: 0 0 15px rgba(0,255,200,0.06) !important; }
-        .chat-input-area button {
-            padding: 8px 20px !important;
-            border-radius: 30px !important;
-            border: none !important;
-            background: #00ffcc !important;
-            color: #0b0e14 !important;
-            font-weight: 700 !important;
-            font-size: 0.8rem !important;
-            cursor: pointer !important;
-            box-shadow: 0 0 15px rgba(0,255,200,0.08) !important;
-            transition: 0.2s !important;
-            white-space: nowrap !important;
-            width: auto !important;
-            margin: 0 !important;
-        }
+        .chat-input-area button { padding: 8px 20px !important; border-radius: 30px !important; border: none !important; background: #00ffcc !important; color: #0b0e14 !important; font-weight: 700 !important; font-size: 0.8rem !important; cursor: pointer !important; box-shadow: 0 0 15px rgba(0,255,200,0.08) !important; transition: 0.2s !important; white-space: nowrap !important; width: auto !important; margin: 0 !important; }
         .chat-input-area button:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(0,255,200,0.15); }
         .chat-panel::-webkit-resizer { background: #00ffcc; border-radius: 0 0 18px 0; opacity: 0.15; }
 
-        #exportCard {
-            padding: 8px 12px !important;
-            margin-bottom: 8px !important;
-        }
-        #exportCard h3 {
-            font-size: 1.0rem !important;
-            margin-bottom: 6px !important;
-        }
-        #exportCard button {
-            font-size: 0.95rem !important;
-            padding: 8px 10px !important;
-            margin-top: 4px !important;
-        }
-
-        .analytics-filter {
-            display: flex;
-            gap: 14px;
-            align-items: center;
-            margin-bottom: 14px;
-            flex-wrap: wrap;
-        }
-        .analytics-filter select {
-            background: #2a2a2a;
-            color: white;
-            padding: 8px 14px;
-            border: 1px solid #3a3a3a;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            cursor: pointer;
-        }
-        .analytics-filter button {
-            background: #2a2a2a;
-            color: white;
-            border: 1px solid #3a3a3a;
-            padding: 8px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.95rem;
-            width: auto;
-            margin: 0;
-        }
-        .analytics-filter button:hover {
-            background: #3a3a3a;
-        }
-
-        #analyticsTab {
-            padding: 14px 24px;
-            overflow-y: auto;
-            height: 100%;
-        }
-        #analyticsTab .stat-card .stat-value {
-            font-size: 1.8rem !important;
-        }
-
         @media (max-width: 1000px) {
-            .sidebar {
-                width: 100%;
-                max-height: 70vh !important;
-                height: auto !important;
-                border-right: none;
-                border-bottom: 1px solid var(--border-color);
-                flex: none;
-            }
-            .sidebar.collapsed {
-                max-height: 0;
-                padding: 0;
-                border-bottom: none;
-            }
+            .sidebar { width: 100%; max-height: 70vh !important; height: auto !important; border-right: none; border-bottom: 1px solid var(--border-color); flex: none; }
+            .sidebar.collapsed { max-height: 0; padding: 0; border-bottom: none; }
             .right-panel { height: 70vh; flex: none; }
             .charts-grid { grid-template-columns: 1fr; }
             .kpi-row { grid-template-columns: repeat(2,1fr); }
             .chat-panel { width: 300px !important; }
-            .controls-right { flex-wrap: wrap; justify-content: flex-end; }
             .system-bar { height: auto !important; min-height: 56px !important; padding: 6px 16px !important; }
             .brand-center { order: 1; width: 100%; }
             .controls-right { order: 2; justify-content: center; flex-wrap: wrap; }
@@ -1473,15 +1224,6 @@ UNIFIED_DASHBOARD_HTML = """
             .sidebar { max-height: 60vh !important; }
             .right-panel { height: 60vh; }
             .chat-panel { width: 260px !important; left: 10px !important; bottom: 10px !important; }
-            .controls-right { gap: 2px; }
-            .sync-btn, .logout-btn, .lang-dropdown, .status-badge, .role-badge {
-                font-size: 0.7rem !important;
-                min-width: 40px !important;
-                padding: 2px 8px !important;
-                height: 28px !important;
-            }
-            .charts-grid { grid-template-columns: 1fr; gap: 8px; }
-            .chart-container { min-height: 80px; }
         }
     </style>
 </head>
@@ -1524,64 +1266,31 @@ UNIFIED_DASHBOARD_HTML = """
     </div>
     <div class="main-layout">
         <div class="sidebar" id="sidebarPanel">
-            <!-- ===== REPORT DAMAGE CARD ===== -->
             <div class="card">
                 <h3><i class="fas fa-camera"></i> <span id="reportTitle">Report Damage</span></h3>
                 <p id="clickHint" style="font-size:1.0rem; color:#2ecc71;">🏢 Click on any building on the map to select it!</p>
                 <div id="selectedBuildingInfo" class="building-info" style="display:none;"></div>
-                <select id="damageLevel">
-                    <option value="minimal">🏠 Minimal/No Damage</option>
-                    <option value="partial">⚠️ Partially Damaged</option>
-                    <option value="complete">💀 Completely Damaged</option>
-                </select>
-                <select id="infrastructureType">
-                    <option value="residential">🏘️ Residential</option>
-                    <option value="commercial">🏪 Commercial</option>
-                    <option value="government">🏛️ Government</option>
-                    <option value="utility">💡 Utility</option>
-                    <option value="transport">🛣️ Transport</option>
-                    <option value="community">🏥 Community</option>
-                    <option value="public">🏟️ Public</option>
-                </select>
+                <select id="damageLevel"><option value="minimal">🏠 Minimal/No Damage</option><option value="partial">⚠️ Partially Damaged</option><option value="complete">💀 Completely Damaged</option></select>
+                <select id="infrastructureType"><option value="residential">🏘️ Residential</option><option value="commercial">🏪 Commercial</option><option value="government">🏛️ Government</option><option value="utility">💡 Utility</option><option value="transport">🛣️ Transport</option><option value="community">🏥 Community</option><option value="public">🏟️ Public</option></select>
                 <input type="text" id="buildingName" placeholder="Building Name">
-                <select id="crisisNature">
-                    <option value="earthquake">🌋 Earthquake</option>
-                    <option value="flood">💧 Flood</option>
-                    <option value="tsunami">🌊 Tsunami</option>
-                    <option value="hurricane">🌀 Hurricane</option>
-                    <option value="wildfire">🔥 Wildfire</option>
-                    <option value="explosion">💥 Explosion</option>
-                    <option value="conflict">⚔️ Conflict</option>
-                </select>
-                <select id="debris">
-                    <option value="yes">Yes - Requires clearing</option>
-                    <option value="no">No debris</option>
-                </select>
+                <select id="crisisNature"><option value="earthquake">🌋 Earthquake</option><option value="flood">💧 Flood</option><option value="tsunami">🌊 Tsunami</option><option value="hurricane">🌀 Hurricane</option><option value="wildfire">🔥 Wildfire</option><option value="explosion">💥 Explosion</option><option value="conflict">⚔️ Conflict</option></select>
+                <select id="debris"><option value="yes">Yes - Requires clearing</option><option value="no">No debris</option></select>
                 <div style="display:flex; gap:8px;">
                     <input type="text" id="lat" placeholder="Latitude" readonly style="flex:1;">
                     <input type="text" id="lng" placeholder="Longitude" readonly style="flex:1;">
                 </div>
-                <button class="btn-location" onclick="shareLocation()" style="font-size:1.1rem; padding:12px;">
-                    <i class="fas fa-location-dot"></i> <span id="gpsLabel">Use My GPS</span>
-                </button>
+                <button class="btn-location" onclick="shareLocation()" style="font-size:1.1rem; padding:12px;"><i class="fas fa-location-dot"></i> <span id="gpsLabel">Use My GPS</span></button>
                 <input type="text" id="textLocation" placeholder="Describe location (e.g., near school)">
                 <textarea id="notes" rows="2" placeholder="Additional notes about damage"></textarea>
-
                 <div style="margin-top:8px;">
                     <label style="color:#aaa; font-size:1.0rem;"><i class="fas fa-image"></i> Upload Photo:</label>
                     <input type="file" id="photo" accept="image/*" capture="environment" style="padding:8px; background:#2a2a2a; border:1px solid #444; border-radius:8px;">
                     <div id="photoPreview" class="photo-preview"></div>
                 </div>
-
-                <button id="submitBtn" onclick="submitReport()" style="font-size:1.1rem; padding:12px; background: linear-gradient(135deg, #2ecc71, #27ae60);">
-                    <i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span>
-                </button>
+                <button id="submitBtn" onclick="submitReport()" style="font-size:1.1rem; padding:12px; background: linear-gradient(135deg, #2ecc71, #27ae60);"><i class="fas fa-paper-plane"></i> <span id="submitLabel">Submit Report</span></button>
                 <div id="submitStatus" style="margin-top:8px; font-size:1.0rem;"></div>
-
                 <div class="scroll-hint">↓ Scroll down for more options ↓</div>
             </div>
-
-            <!-- ===== SMS REPORT CARD ===== -->
             <div class="card">
                 <h3><i class="fas fa-sms"></i> <span id="smsTitle">SMS Report</span></h3>
                 <div class="sms-card">
@@ -1591,14 +1300,10 @@ UNIFIED_DASHBOARD_HTML = """
                 </div>
                 <div id="smsStatus" style="margin-top:8px; font-size:1.0rem;"></div>
             </div>
-
-            <!-- ===== RECENT REPORTS ===== -->
             <div class="card">
                 <h3><i class="fas fa-list"></i> <span id="recentTitle">Recent Reports</span></h3>
                 <div id="reportsList" class="reports-list">Loading...</div>
             </div>
-
-            <!-- ===== EXPORT DATA (ADMIN ONLY) ===== -->
             <div class="card" id="exportCard">
                 <h3><i class="fas fa-download"></i> <span id="exportTitle">Export Data (Admin Only)</span></h3>
                 <div style="display:flex; gap:8px;">
@@ -1607,14 +1312,10 @@ UNIFIED_DASHBOARD_HTML = """
                 </div>
             </div>
         </div>
-
         <div class="right-panel">
             <div class="map-container"><div id="map"></div></div>
-            <!-- ===== CHARTS SECTION - 50/50 WITH MAP, ROBUST ===== -->
             <div class="charts-section" id="chartsSection">
-                <div class="charts-title">
-                    📊 DAMAGE ANALYTICS DASHBOARD
-                </div>
+                <div class="charts-title">📊 DAMAGE ANALYTICS DASHBOARD</div>
                 <div class="charts-grid">
                     <div class="chart-container"><h4>🥧 Damage Distribution</h4><canvas id="pieChart"></canvas></div>
                     <div class="chart-container"><h4>📊 Damage by Infrastructure</h4><canvas id="barChart"></canvas></div>
@@ -1705,119 +1406,51 @@ async function loadAdminStats() {
         const res = await fetch(`/api/admin/stats?days=${days}`);
         if (!res.ok) throw new Error('API error: ' + res.status);
         const data = await res.json();
-        console.log('Analytics data:', data);
-
         document.getElementById('totalReports').innerHTML = data.total_reports || 0;
         document.getElementById('totalUsers').innerHTML = data.total_users || 0;
         document.getElementById('avgResponse').innerHTML = data.avg_response_minutes || 'N/A';
         document.getElementById('topReporter').innerHTML = data.top_reporters[0]?.username || '-';
-
         const safeDestroy = (chart) => { if (chart) { chart.destroy(); } };
-
         safeDestroy(trendChart);
         const trendLabels = data.daily_trend.map(d => d.date.slice(5));
         const trendData = data.daily_trend.map(d => d.count);
         trendChart = new Chart(document.getElementById('trendChart'), {
             type: 'line',
-            data: {
-                labels: trendLabels.length ? trendLabels : ['No Data'],
-                datasets: [{
-                    label: 'Reports',
-                    data: trendData.length ? trendData : [0],
-                    borderColor: '#2ecc71',
-                    fill: true,
-                    backgroundColor: 'rgba(46,204,113,0.1)',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { labels: { color: '#e0e0e0' } } },
-                scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } }
-            }
+            data: { labels: trendLabels.length ? trendLabels : ['No Data'], datasets: [{ label: 'Reports', data: trendData.length ? trendData : [0], borderColor: '#2ecc71', fill: true, backgroundColor: 'rgba(46,204,113,0.1)', tension: 0.4 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } }, scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } } }
         });
-
         safeDestroy(damageChart);
         const damageLabels = data.by_damage.map(d => d.level);
         const damageData = data.by_damage.map(d => d.count);
         damageChart = new Chart(document.getElementById('damageChart'), {
             type: 'doughnut',
-            data: {
-                labels: damageLabels.length ? damageLabels : ['No Data'],
-                datasets: [{
-                    data: damageData.length ? damageData : [1],
-                    backgroundColor: ['#e74c3c', '#f39c12', '#2ecc71', '#3498db']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { labels: { color: '#e0e0e0' } } }
-            }
+            data: { labels: damageLabels.length ? damageLabels : ['No Data'], datasets: [{ data: damageData.length ? damageData : [1], backgroundColor: ['#e74c3c', '#f39c12', '#2ecc71', '#3498db'] }] },
+            options: { responsive: true, plugins: { legend: { labels: { color: '#e0e0e0' } } } }
         });
-
         safeDestroy(infraChart);
         const infraLabels = data.by_infrastructure.map(d => d.type);
         const infraData = data.by_infrastructure.map(d => d.count);
         infraChart = new Chart(document.getElementById('infraChart'), {
             type: 'bar',
-            data: {
-                labels: infraLabels.length ? infraLabels : ['No Data'],
-                datasets: [{
-                    label: 'Reports',
-                    data: infraData.length ? infraData : [0],
-                    backgroundColor: '#2ecc71',
-                    borderRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { labels: { color: '#e0e0e0' } } },
-                scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } }
-            }
+            data: { labels: infraLabels.length ? infraLabels : ['No Data'], datasets: [{ label: 'Reports', data: infraData.length ? infraData : [0], backgroundColor: '#2ecc71', borderRadius: 8 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } }, scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } } }
         });
-
         safeDestroy(crisisChart);
         const crisisLabels = data.by_crisis.map(d => d.crisis);
         const crisisData = data.by_crisis.map(d => d.count);
         crisisChart = new Chart(document.getElementById('crisisChart'), {
             type: 'bar',
-            data: {
-                labels: crisisLabels.length ? crisisLabels : ['No Data'],
-                datasets: [{
-                    label: 'Reports',
-                    data: crisisData.length ? crisisData : [0],
-                    backgroundColor: '#3498db',
-                    borderRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { labels: { color: '#e0e0e0' } } },
-                scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } }
-            }
+            data: { labels: crisisLabels.length ? crisisLabels : ['No Data'], datasets: [{ label: 'Reports', data: crisisData.length ? crisisData : [0], backgroundColor: '#3498db', borderRadius: 8 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#e0e0e0' } } }, scales: { x: { ticks: { color: '#aaa' } }, y: { ticks: { color: '#aaa' }, beginAtZero: true } } }
         });
-
-        document.getElementById('reportersTable').querySelector('tbody').innerHTML =
-            data.top_reporters.map((r,i) =>
-                `<tr><td style="padding:8px;">${i+1}</td><td style="padding:8px;">${r.username}</td><td style="padding:8px;">${r.reports}</td></tr>`
-            ).join('') || '<tr><td colspan="3" style="text-align:center;color:#666;">No data</td></tr>';
-        document.getElementById('rolesTable').querySelector('tbody').innerHTML =
-            data.users_by_role.map(r =>
-                `<tr><td style="padding:8px;">${r.role}</td><td style="padding:8px;">${r.count}</td></tr>`
-            ).join('') || '<tr><td colspan="2" style="text-align:center;color:#666;">No data</td></tr>';
-
+        document.getElementById('reportersTable').querySelector('tbody').innerHTML = data.top_reporters.map((r,i) => `<tr><td style="padding:8px;">${i+1}</td><td style="padding:8px;">${r.username}</td><td style="padding:8px;">${r.reports}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:#666;">No data</td></tr>';
+        document.getElementById('rolesTable').querySelector('tbody').innerHTML = data.users_by_role.map(r => `<tr><td style="padding:8px;">${r.role}</td><td style="padding:8px;">${r.count}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;color:#666;">No data</td></tr>';
     } catch(e) {
         console.error('Error loading analytics:', e);
         document.getElementById('totalReports').innerHTML = '⚠️ Error';
     }
 }
 
-// ============================================================
-// ROBUST CHARTS - Always render, fallback to placeholder values
-// ============================================================
 function updateCommandCenterCharts() {
     try {
         const damageCounts = { minimal: 0, partial: 0, complete: 0 };
@@ -1826,103 +1459,44 @@ function updateCommandCenterCharts() {
             else if (r.damage_level === 'partial') damageCounts.partial++;
             else if (r.damage_level === 'complete') damageCounts.complete++;
         });
-
-        // Pie chart
         if (pieChart) pieChart.destroy();
         const pieCtx = document.getElementById('pieChart');
         if (pieCtx) {
             pieChart = new Chart(pieCtx, {
                 type: 'pie',
-                data: {
-                    labels: ['Minimal', 'Partial', 'Complete'],
-                    datasets: [{
-                        data: [damageCounts.minimal || 1, damageCounts.partial || 1, damageCounts.complete || 1],
-                        backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c']
-                    }]
-                },
+                data: { labels: ['Minimal', 'Partial', 'Complete'], datasets: [{ data: [damageCounts.minimal || 1, damageCounts.partial || 1, damageCounts.complete || 1], backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c'] }] },
                 options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
             });
         }
-
-        // Bar chart - infrastructure
         const infraCounts = {};
-        reports.forEach(r => {
-            const t = r.infrastructure_type || 'Unknown';
-            infraCounts[t] = (infraCounts[t] || 0) + 1;
-        });
+        reports.forEach(r => { const t = r.infrastructure_type || 'Unknown'; infraCounts[t] = (infraCounts[t] || 0) + 1; });
         const infraLabels = Object.keys(infraCounts).slice(0, 6);
         const infraData = infraLabels.map(l => infraCounts[l] || 0);
         if (barChart) barChart.destroy();
         const barCtx = document.getElementById('barChart');
         if (barCtx) {
             if (infraLabels.length) {
-                barChart = new Chart(barCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: infraLabels,
-                        datasets: [{
-                            label: 'Reports',
-                            data: infraData,
-                            backgroundColor: '#3498db'
-                        }]
-                    },
-                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
-                });
+                barChart = new Chart(barCtx, { type: 'bar', data: { labels: infraLabels, datasets: [{ label: 'Reports', data: infraData, backgroundColor: '#3498db' }] }, options: { responsive: true, scales: { y: { beginAtZero: true } } } });
             } else {
-                // Fallback: show "No Data"
-                barChart = new Chart(barCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['No Data'],
-                        datasets: [{ label: 'Reports', data: [0], backgroundColor: '#888' }]
-                    },
-                    options: { responsive: true }
-                });
+                barChart = new Chart(barCtx, { type: 'bar', data: { labels: ['No Data'], datasets: [{ label: 'Reports', data: [0], backgroundColor: '#888' }] }, options: { responsive: true } });
             }
         }
-
-        // Line chart - daily trend
         const dailyCounts = {};
-        reports.forEach(r => {
-            const d = new Date(r.timestamp).toISOString().split('T')[0];
-            dailyCounts[d] = (dailyCounts[d] || 0) + 1;
-        });
+        reports.forEach(r => { const d = new Date(r.timestamp).toISOString().split('T')[0]; dailyCounts[d] = (dailyCounts[d] || 0) + 1; });
         const last7Days = [];
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            last7Days.push(d.toISOString().split('T')[0]);
-        }
+        for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); last7Days.push(d.toISOString().split('T')[0]); }
         const lineData = last7Days.map(d => dailyCounts[d] || 0);
         if (lineChart) lineChart.destroy();
         const lineCtx = document.getElementById('lineChart');
         if (lineCtx) {
             lineChart = new Chart(lineCtx, {
                 type: 'line',
-                data: {
-                    labels: last7Days.map(d => d.slice(5)),
-                    datasets: [{
-                        label: 'Reports per Day',
-                        data: lineData,
-                        borderColor: '#2ecc71',
-                        fill: true,
-                        backgroundColor: 'rgba(46,204,113,0.1)',
-                        tension: 0.4
-                    }]
-                },
+                data: { labels: last7Days.map(d => d.slice(5)), datasets: [{ label: 'Reports per Day', data: lineData, borderColor: '#2ecc71', fill: true, backgroundColor: 'rgba(46,204,113,0.1)', tension: 0.4 }] },
                 options: { responsive: true, scales: { y: { beginAtZero: true } } }
             });
         }
-
-        setTimeout(() => {
-            if (pieChart) pieChart.resize();
-            if (barChart) barChart.resize();
-            if (lineChart) lineChart.resize();
-        }, 200);
-
-    } catch (e) {
-        console.error('Chart error:', e);
-    }
+        setTimeout(() => { if (pieChart) pieChart.resize(); if (barChart) barChart.resize(); if (lineChart) lineChart.resize(); }, 200);
+    } catch (e) { console.error('Chart error:', e); }
 }
 
 async function setLanguage(lang) {
@@ -1952,10 +1526,7 @@ function initMap() {
     if (container.offsetHeight === 0) container.style.height = '400px';
     map = L.map('map', { center: [20, 0], zoom: 2, zoomControl: true, fadeAnimation: true });
     map.attributionControl.setPrefix('');
-    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-    });
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 });
     const osmFallback = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM', maxZoom: 19 });
     const cycleLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', { attribution: '&copy; OSM | CycleOSM', maxZoom: 19 });
     const humanitarianLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', { attribution: '&copy; OSM | Humanitarian', maxZoom: 19 });
@@ -1975,9 +1546,7 @@ function initMap() {
                 document.getElementById('buildingName').value = building.name;
                 document.getElementById('selectedBuildingInfo').style.display = 'block';
                 document.getElementById('selectedBuildingInfo').innerHTML = `🏢 Selected: ${building.name}<br>📍 ${building.address || 'Address unknown'}`;
-            } else {
-                document.getElementById('selectedBuildingInfo').style.display = 'none';
-            }
+            } else { document.getElementById('selectedBuildingInfo').style.display = 'none'; }
         } catch(err) { console.error(err); }
         if(currentMarker) map.removeLayer(currentMarker);
         currentMarker = L.marker([lat, lng]).addTo(map).bindPopup('Selected location').openPopup();
@@ -2130,13 +1699,8 @@ function updateReportsList() {
 
 function updateConnectionStatus(isOnline) {
     let statusDiv = document.getElementById('connectionStatus');
-    if(isOnline) { 
-        statusDiv.innerHTML = '<i class="fas fa-circle"></i> Online'; 
-        statusDiv.className = 'status-badge status-online'; 
-    } else { 
-        statusDiv.innerHTML = '<i class="fas fa-circle"></i> Offline'; 
-        statusDiv.className = 'status-badge'; 
-    }
+    if(isOnline) { statusDiv.innerHTML = '<i class="fas fa-circle"></i> Online'; statusDiv.className = 'status-badge status-online'; }
+    else { statusDiv.innerHTML = '<i class="fas fa-circle"></i> Offline'; statusDiv.className = 'status-badge'; }
 }
 
 async function loadCurrentUser() {
@@ -2145,18 +1709,18 @@ async function loadCurrentUser() {
         let user = await res.json();
         currentUser = user;
         document.getElementById('userRoleBadge').innerHTML = `${user.role} ${user.points} pts`;
-        if(user.role === 'admin') { 
-            document.getElementById('exportCard').style.display = 'block'; 
-            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block'; 
+        if(user.role === 'admin') {
+            document.getElementById('exportCard').style.display = 'block';
+            document.getElementById('tabAnalyticsBtn').style.display = 'inline-block';
             document.getElementById('exportCSVBtn').style.display = 'inline-flex';
             document.getElementById('exportGeoJSONBtn').style.display = 'inline-flex';
-            isAdmin=true; 
+            isAdmin=true;
             setTimeout(() => loadAdminStats(), 500);
-        } else { 
-            document.getElementById('exportCard').style.display = 'none'; 
+        } else {
+            document.getElementById('exportCard').style.display = 'none';
             document.getElementById('exportCSVBtn').style.display = 'none';
             document.getElementById('exportGeoJSONBtn').style.display = 'none';
-            isAdmin=false; 
+            isAdmin=false;
         }
         loadReports();
         loadLeaderboard();
@@ -2171,9 +1735,7 @@ async function loadLeaderboard() {
         let leaders = await res.json();
         let container = document.getElementById('leaderboardList');
         if (!container) return;
-        container.innerHTML = leaders.map((l,i) => 
-            `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`
-        ).join('');
+        container.innerHTML = leaders.map((l,i) => `<div class="leaderboard-item"><span class="rank">${i+1}</span><span>${l.username}</span><span>🏆 ${l.points}</span></div>`).join('');
     } catch(e) {
         console.warn('Leaderboard unavailable:', e.message);
         let container = document.getElementById('leaderboardList');
@@ -2186,7 +1748,7 @@ async function loadStats() { try { let res=await fetch('/api/stats'); let stats=
 function exportCSV() { window.open('/api/reports/csv','_blank'); }
 
 async function exportGeoJSON() {
-    try { let res=await fetch('/api/reports/geojson'); let data=await res.json(); let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='reports.geojson'; a.click(); URL.revokeObjectURL(url); } catch(e){ alert('Export failed'); }
+    try { let res=await fetch('/api/reports/geojson_spatial'); let data=await res.json(); let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='reports.geojson'; a.click(); URL.revokeObjectURL(url); } catch(e){ alert('Export failed'); }
 }
 
 function showToast(msg,type) { alert(msg); }
@@ -2196,9 +1758,9 @@ function toggleLeaderboard() { let el=document.querySelector('.leaderboard-list'
 document.getElementById('pendingTasksCard').addEventListener('click', function() {
     let pendingCount = offlineQueue.length;
     if(pendingCount === 0) { alert('No pending tasks.'); return; }
-    let msg = 'Pending reports to sync:\\n';
-    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\\n`; });
-    msg += '\\nClick OK to sync now.';
+    let msg = 'Pending reports to sync:\n';
+    offlineQueue.forEach((r,i) => { msg += `${i+1}. ${r.building_name || 'Unnamed'} - ${r.damage_level} (${new Date(r.timestamp).toLocaleString()})\n`; });
+    msg += '\nClick OK to sync now.';
     if(confirm(msg)) forceSync();
 });
 
@@ -2235,7 +1797,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(() => loadLeaderboard(), 10000);
 });
 
-// ===== CHAT =====
 function addChatMessage(username, message, isOwn = false) {
     const container = document.getElementById('chatMessages');
     if (!container) return;
@@ -2256,11 +1817,8 @@ function sendLocalChatMessage() {
 const chatSendBtn = document.getElementById('chatSendBtn');
 const chatInput = document.getElementById('chatInput');
 if (chatSendBtn) chatSendBtn.addEventListener('click', sendLocalChatMessage);
-if (chatInput) chatInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') sendLocalChatMessage();
-});
+if (chatInput) chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') sendLocalChatMessage(); });
 
-// ===== DRAG CHAT =====
 (function initDragChat() {
     const container = document.getElementById('glowChat');
     const header = document.getElementById('chatDragHandle');
@@ -2290,15 +1848,10 @@ if (chatInput) chatInput.addEventListener('keydown', function(e) {
         container.style.right = 'auto';
     });
     document.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
-            container.style.cursor = 'grab';
-            header.style.cursor = 'grab';
-        }
+        if (isDragging) { isDragging = false; container.style.cursor = 'grab'; header.style.cursor = 'grab'; }
     });
 })();
 
-// ===== TOGGLE SIDEBAR =====
 document.addEventListener('DOMContentLoaded', function() {
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const sidebar = document.getElementById('sidebarPanel');
