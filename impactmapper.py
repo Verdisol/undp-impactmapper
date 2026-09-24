@@ -1249,6 +1249,7 @@ async function syncOfflineReports() {
     } catch(e) { console.error(e); }
 }
 async function forceSync() { await syncOfflineReports(); }
+window.forceSync = forceSync;
 
 async function loadReports() {
     try {
@@ -1360,6 +1361,7 @@ async function loadLeaderboard() {
 async function loadStats() { try { let res=await fetch('/api/stats'); let stats=await res.json(); } catch(e){} }
 
 function exportCSV() { window.open('/api/reports/csv','_blank'); }
+window.exportCSV = exportCSV;
 async function exportGeoJSON() {
     try { let res=await fetch('/api/reports/geojson_spatial'); let data=await res.json(); let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='reports.geojson'; a.click(); URL.revokeObjectURL(url); } catch(e){ alert('Export failed'); }
 }
