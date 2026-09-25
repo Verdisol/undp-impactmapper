@@ -1,508 +1,746 @@
-"""HTML templates for GeoReport-DR."""
-
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GeoReport-DR — Disaster Reporting Platform</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Inter', sans-serif; min-height: 100vh;
-       background: linear-gradient(135deg, #0a1a0f 0%, #061018 100%);
-       position: relative; overflow-x: hidden; }
-.hero-bg { position: fixed; inset: 0;
-    background-image: url('https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1600');
-    background-size: cover; background-position: center 30%;
-    opacity: 0.10; z-index: 0; }
-.container { position: relative; z-index: 1; max-width: 1400px;
-    margin: 0 auto; padding: 40px 60px; min-height: 100vh;
-    display: flex; flex-direction: column; }
-.navbar { display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 0; margin-bottom: 80px; flex-wrap: wrap; gap: 20px; }
-.logo h1 { font-size: 26px; font-weight: 700; color: white; }
-.logo span { color: #2ecc71; }
-.logo p { font-size: 12px; color: #aaa; margin-top: 4px; }
-.hero-section { display: flex; justify-content: space-between;
-    align-items: center; gap: 60px; flex-wrap: wrap; margin-bottom: 80px; }
-.hero-left { flex: 1; min-width: 300px; }
-.hero-badge { display: inline-block; background: rgba(46,204,113,0.15);
-    border: 1px solid rgba(46,204,113,0.4); padding: 6px 16px;
-    border-radius: 30px; font-size: 12px; color: #2ecc71;
-    margin-bottom: 24px; }
-.hero-left h1 { font-size: 52px; font-weight: 800; line-height: 1.2;
-    margin-bottom: 20px;
-    background: linear-gradient(135deg, #fff, #2ecc71);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.hero-left p { font-size: 17px; color: #ccc; line-height: 1.6;
-    margin-bottom: 32px; max-width: 600px; }
-.features { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 24px; }
-.feature-item { font-size: 13px; color: #aaa; }
-.feature-item strong { color: #2ecc71; }
-.hero-right { flex: 0.8; min-width: 350px; }
-.login-card { background: rgba(17, 17, 17, 0.95);
-    backdrop-filter: blur(15px); border-radius: 16px; padding: 40px;
-    border: 1px solid rgba(46,204,113,0.3);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.3); }
-.login-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-.login-card p { font-size: 13px; color: #888; margin-bottom: 24px; }
-.input-group { margin-bottom: 14px; }
-.input-group input { width: 100%; padding: 14px 16px; background: #2a2a2a;
-    border: 1px solid #3a3a3a; border-radius: 12px; color: white;
-    font-size: 14px; }
-.input-group input:focus { outline: none; border-color: #2ecc71;
-    box-shadow: 0 0 0 3px rgba(46,204,113,0.2); }
-.login-btn { width: 100%; padding: 14px;
-    background: linear-gradient(135deg, #2ecc71, #27ae60);
-    color: white; font-weight: 700; border: none; border-radius: 12px;
-    font-size: 16px; cursor: pointer; margin-top: 8px; }
-.demo-info { margin-top: 24px; padding-top: 20px;
-    border-top: 1px solid #2a2a2a; text-align: center; }
-.demo-info p { font-size: 11px; color: #666; margin-bottom: 8px; }
-.demo-badge { display: inline-flex; gap: 12px; justify-content: center;
-    flex-wrap: wrap; }
-.demo-role { background: rgba(46,204,113,0.1); padding: 4px 12px;
-    border-radius: 20px; font-size: 11px; color: #2ecc71; }
-.footer { margin-top: auto; padding: 30px 0 20px; text-align: center;
-    border-top: 1px solid rgba(255,255,255,0.05); }
-.footer p { font-size: 12px; color: #666; }
-@media (max-width: 968px) { .container { padding: 20px 30px; }
-    .hero-section { flex-direction: column; }
-    .hero-left h1 { font-size: 38px; } }
-</style>
-</head>
-<body>
-<div class="hero-bg"></div>
-<div class="container">
-    <div class="navbar">
-        <div class="logo">
-            <h1>🌍 Geo<span>Report-DR</span></h1>
-            <p>Crowdsourced Disaster Reporting &amp; Triage System</p>
-        </div>
-    </div>
-    <div class="hero-section">
-        <div class="hero-left">
-            <div class="hero-badge">🎓 Research Prototype — v1.0.0-dissertation</div>
-            <h1>GEOTAGGED<br>DISASTER REPORTING</h1>
-            <p>A GIS-based crowdsourced reporting platform that captures
-               real-time GPS-tagged reports of damage, needs, hazards, and
-               status updates during disasters — enabling faster, evidence-based
-               response coordination.</p>
-            <div class="features">
-                <div class="feature-item"><strong>📸</strong> Photo-tagged reports</div>
-                <div class="feature-item"><strong>📍</strong> GPS + map-pin fallback</div>
-                <div class="feature-item"><strong>📶</strong> Offline-first sync</div>
-                <div class="feature-item"><strong>📱</strong> SMS fallback</div>
-                <div class="feature-item"><strong>✅</strong> Verification workflow</div>
-            </div>
-        </div>
-        <div class="hero-right">
-            <div class="login-card">
-                <h2>Access Platform</h2>
-                <p>Login to submit or triage disaster reports</p>
-                <div class="input-group"><input type="text" id="username" placeholder="Username"></div>
-                <div class="input-group"><input type="password" id="password" placeholder="Password"></div>
-                <button class="login-btn" onclick="login()">🔐 Login</button>
-                <div id="errorMsg" style="color:#e74c3c; font-size:12px; margin-top:12px; text-align:center;"></div>
-                <div class="demo-info">
-                    <p>Demo Accounts:</p>
-                    <div class="demo-badge">
-                        <span class="demo-role">👑 admin / admin123</span>
-                        <span class="demo-role">📸 reporter / report123</span>
-                        <span class="demo-role">👁️ viewer / view123</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="footer">
-        <p>© <span id="currentYear"></span> GeoReport-DR — Dissertation Prototype</p>
-    </div>
-</div>
-<script>
-document.getElementById('currentYear').innerText = new Date().getFullYear();
-async function login() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('errorMsg');
-    if (!username || !password) {
-        errorDiv.innerText = 'Please enter username and password'; return;
-    }
-    try {
-        const response = await fetch('/dashboard', {
-            headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) }
-        });
-        if (response.ok) { window.location.href = '/dashboard'; }
-        else { errorDiv.innerText = 'Invalid credentials'; }
-    } catch(e) { errorDiv.innerText = 'Login failed'; }
-}
-document.getElementById('password').addEventListener('keypress',
-    function(e) { if (e.key === 'Enter') login(); });
-</script>
-</body>
-</html>
 """
+GeoReport-DR: GIS-Based Crowdsourced Reporting Tool for Disaster Response
+v1.0.0-dissertation
+"""
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from contextlib import asynccontextmanager
+import uvicorn
+import os
+import json
+import hashlib
+import uuid
+import urllib.request
+import urllib.parse
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict
+import asyncpg
+
+from templates import LOGIN_HTML, DASHBOARD_HTML
+
+PHOTOS_DIR = "/tmp/photos"
+os.makedirs(PHOTOS_DIR, exist_ok=True)
+
+APP_TITLE = "GeoReport-DR"
+APP_VERSION = "1.0.0-dissertation"
+
+security = HTTPBasic()
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable not set")
 
 
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GeoReport-DR — Situation Console</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; overflow: hidden; }
-body { font-family: 'Inter', sans-serif; background: #0e1116; color: #e0e0e0; }
-.leaflet-control-attribution { display: none !important; }
-.system-bar { background: #10241a; padding: 10px 24px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 2px solid #2ecc71; height: 64px; flex-shrink: 0; }
-.brand h1 { font-size: 1.2rem; font-weight: 700; color: white; }
-.brand h1 span { color: #2ecc71; }
-.brand p { font-size: 0.7rem; color: rgba(255,255,255,0.6); margin-top: 2px; }
-.controls-right { display: flex; gap: 8px; align-items: center; }
-.btn { height: 34px; padding: 6px 14px; border-radius: 6px;
-    font-size: 0.82rem; font-weight: 600; background: rgba(255,255,255,0.9);
-    color: #000; border: 1px solid rgba(0,0,0,0.1); cursor: pointer;
-    display: inline-flex; align-items: center; gap: 6px;
-    text-decoration: none; white-space: nowrap; }
-.btn:hover { background: #fff; }
-.btn-danger { background: rgba(255,200,200,0.9); color: #b00000; }
-.tabs-container { background: #151922; padding: 0 16px;
-    border-bottom: 1px solid #222732; display: flex; gap: 4px;
-    flex-shrink: 0; height: 46px; }
-.tab-btn { padding: 12px 22px; background: transparent; color: #8a93a6;
-    border: none; border-bottom: 3px solid transparent; font-size: 0.92rem;
-    font-weight: 600; cursor: pointer; }
-.tab-btn.active { color: #2ecc71; border-bottom-color: #2ecc71;
-    background: rgba(46,204,113,0.08); }
-#commandTab { display: flex; flex-direction: column;
-    height: calc(100vh - 110px); overflow: hidden; }
-.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 10px; padding: 10px 16px; flex-shrink: 0; }
-.kpi-card { background: #171b23; border-radius: 8px; padding: 12px 14px;
-    border-left: 3px solid #2ecc71; }
-.kpi-header { display: flex; justify-content: space-between;
-    align-items: center; margin-bottom: 6px; }
-.kpi-header span { font-size: 0.72rem; color: #8a93a6;
-    text-transform: uppercase; letter-spacing: 0.5px; }
-.kpi-value { font-size: 1.5rem; font-weight: 700; }
-.kpi-value.warning { color: #f39c12; }
-.kpi-sub { font-size: 0.72rem; color: #8a93a6; margin-top: 4px; }
-.main-layout { display: grid; grid-template-columns: 400px 1fr;
-    flex: 1; overflow: hidden; min-height: 0; }
-.sidebar { background: #151922; overflow-y: auto; padding: 14px;
-    border-right: 1px solid #222732; min-width: 0; }
-.sidebar::-webkit-scrollbar { width: 6px; }
-.sidebar::-webkit-scrollbar-thumb { background: #2ecc71;
-    border-radius: 10px; }
-.sidebar.collapsed { display: none; }
-.right-panel { display: flex; flex-direction: column;
-    overflow: hidden; min-height: 0; min-width: 0; }
-.map-container { flex: 1; min-height: 0; position: relative; }
-#map { height: 100% !important; width: 100% !important; }
-.charts-section { flex: 0 0 180px; background: #171b23;
-    border-top: 1px solid #222732; padding: 10px 14px;
-    display: flex; flex-direction: column; }
-.charts-title { font-size: 0.8rem; font-weight: 700; color: #8a93a6;
-    text-transform: uppercase; letter-spacing: 1px;
-    margin-bottom: 8px; flex-shrink: 0; }
-.charts-grid { display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 10px; flex: 1; min-height: 0; }
-.chart-container { background: #0e1116; border-radius: 6px;
-    padding: 6px; display: flex; flex-direction: column;
-    justify-content: center; min-height: 0; }
-.chart-container h4 { text-align: center; margin-bottom: 4px;
-    color: #8a93a6; font-size: 0.7rem; }
-canvas { width: 100% !important; max-height: 110px; }
-.card { background: #1a1f28; border-radius: 10px; padding: 14px;
-    margin-bottom: 12px; border: 1px solid #222732; }
-.card h3 { color: #2ecc71; margin-bottom: 10px; font-size: 1rem;
-    display: flex; align-items: center; gap: 8px; }
-label { display: block; font-size: 0.72rem; color: #8a93a6;
-    margin-top: 8px; margin-bottom: 4px; text-transform: uppercase;
-    letter-spacing: 0.5px; }
-input, select, textarea { width: 100%; padding: 9px 11px;
-    background: #0e1116; border: 1px solid #2a3040; border-radius: 7px;
-    color: #e0e0e0; font-size: 0.9rem; font-family: inherit; }
-input:focus, select:focus, textarea:focus { outline: none;
-    border-color: #2ecc71; }
-button.primary { background: linear-gradient(135deg, #2ecc71, #27ae60);
-    color: white; padding: 11px; font-weight: 700; border: none;
-    border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px;
-    font-size: 0.95rem; }
-button.secondary { background: #2a3040; color: white; padding: 9px;
-    font-weight: 600; border: none; border-radius: 8px; cursor: pointer;
-    width: 100%; margin-top: 6px; font-size: 0.85rem; }
-.rt-tabs { display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 4px; margin-bottom: 10px; }
-.rt-tab { padding: 8px 4px; background: #0e1116; color: #8a93a6;
-    border: 1px solid #2a3040; border-radius: 6px; cursor: pointer;
-    font-size: 0.72rem; font-weight: 600; }
-.rt-tab.active { background: rgba(46,204,113,0.15); color: #2ecc71;
-    border-color: #2ecc71; }
-.reports-list { max-height: 240px; overflow-y: auto; }
-.report-item { background: #0e1116; padding: 9px 11px; margin: 6px 0;
-    border-radius: 7px; border-left: 3px solid #2ecc71; cursor: pointer;
-    font-size: 0.85rem; }
-.report-item.sev-critical { border-left-color: #e74c3c; }
-.report-item.sev-high { border-left-color: #e67e22; }
-.report-item.sev-medium { border-left-color: #f39c12; }
-.report-item .ri-head { display: flex; justify-content: space-between;
-    margin-bottom: 3px; }
-.report-item .ri-type { font-size: 0.68rem; color: #8a93a6;
-    text-transform: uppercase; }
-.report-item .ri-status { font-size: 0.68rem; padding: 1px 6px;
-    border-radius: 10px; background: rgba(255,255,255,0.05); }
-.triage-item { background: #0e1116; padding: 10px; margin: 6px 0;
-    border-radius: 7px; border-left: 3px solid #f39c12; font-size: 0.82rem; }
-.triage-actions { display: flex; gap: 4px; margin-top: 6px; }
-.triage-actions button { flex: 1; padding: 5px; font-size: 0.72rem;
-    border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
-.t-verify { background: #2ecc71; color: white; }
-.t-reject { background: #e74c3c; color: white; }
-.t-assign { background: #3498db; color: white; }
-.report-marker { background: transparent !important; border: none !important; }
-.marker-pin { width: 30px; height: 30px;
-    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
-.marker-pin span { transform: rotate(45deg); font-size: 14px;
-    line-height: 1; }
-.marker-pin.critical { animation: pulseCritical 1.5s infinite; }
-@keyframes pulseCritical {
-    0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.7); }
-    70% { box-shadow: 0 0 0 12px rgba(231,76,60,0); }
-    100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); }
-}
-#analyticsTab { padding: 14px 20px; overflow-y: auto;
-    height: calc(100vh - 110px); display: none; }
-.analytics-filter { display: flex; gap: 12px; align-items: center;
-    margin-bottom: 14px; flex-wrap: wrap; }
-.stat-card { background: #171b23; border-radius: 10px;
-    padding: 16px; }
-.stat-card .value { font-size: 1.6rem; font-weight: 800;
-    color: #2ecc71; }
-.stat-card .label { font-size: 0.78rem; color: #8a93a6;
-    margin-top: 4px; }
-.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 12px; margin-bottom: 14px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 12px; }
-.analytics-card { background: #171b23; border-radius: 10px;
-    padding: 16px; }
-.analytics-card h3 { color: #2ecc71; font-size: 0.95rem;
-    margin-bottom: 10px; }
-@media (max-width: 1000px) {
-    .main-layout { grid-template-columns: 1fr; }
-    .sidebar { max-height: 45vh; }
-    .charts-grid { grid-template-columns: 1fr; }
-    .kpi-row { grid-template-columns: repeat(2, 1fr); }
-    .rt-tabs { grid-template-columns: repeat(2, 1fr); }
-}
-</style>
-</head>
-<body>
-<div class="system-bar">
-    <div class="brand">
-        <h1>🌍 Geo<span>Report-DR</span></h1>
-        <p>Crowdsourced Disaster Reporting &amp; Triage System</p>
-    </div>
-    <div class="controls-right">
-        <div id="connectionStatus" class="btn"><i class="fas fa-circle" style="color:#2ecc71;font-size:8px;"></i> Online</div>
-        <button class="btn" onclick="forceSync()"><i class="fas fa-sync-alt"></i> Sync</button>
-        <span id="userRoleBadge" class="btn"></span>
-        <button class="btn" onclick="exportCSV()">CSV</button>
-        <button class="btn" onclick="exportGeoJSON()">GeoJSON</button>
-        <a href="/" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
-    </div>
-</div>
+async def get_db_conn():
+    return await asyncpg.connect(DATABASE_URL)
 
-<div class="tabs-container">
-    <button class="tab-btn active" onclick="switchTab('command')" id="tabCommandBtn">Situation Console</button>
-    <button class="tab-btn" onclick="switchTab('analytics')" id="tabAnalyticsBtn" style="display:none;">Analytics &amp; Research</button>
-</div>
 
-<div id="commandTab">
-    <div class="kpi-row">
-        <div class="kpi-card">
-            <div class="kpi-header"><span>Total Reports</span><i class="fas fa-file-alt"></i></div>
-            <div class="kpi-value" id="kpiTotal">0</div>
-            <div class="kpi-sub">All categories</div>
-        </div>
-        <div class="kpi-card" style="border-left-color:#e74c3c;">
-            <div class="kpi-header"><span>Critical</span><i class="fas fa-exclamation-triangle"></i></div>
-            <div class="kpi-value" id="kpiCritical" style="color:#e74c3c;">0</div>
-            <div class="kpi-sub">Life-threatening</div>
-        </div>
-        <div class="kpi-card" style="border-left-color:#f39c12;">
-            <div class="kpi-header"><span>Pending Verification</span><i class="fas fa-clock"></i></div>
-            <div class="kpi-value warning" id="kpiPending">0</div>
-            <div class="kpi-sub">Awaiting triage</div>
-        </div>
-        <div class="kpi-card" style="border-left-color:#3498db;">
-            <div class="kpi-header"><span>Verified</span><i class="fas fa-check-circle"></i></div>
-            <div class="kpi-value" id="kpiVerified">0</div>
-            <div class="kpi-sub">Confirmed reports</div>
-        </div>
-    </div>
+async def ensure_tables():
+    conn = await get_db_conn()
+    try:
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id SERIAL PRIMARY KEY,
+                report_uuid TEXT UNIQUE NOT NULL,
+                report_type TEXT DEFAULT 'damage',
+                severity TEXT DEFAULT 'medium',
+                verification_status TEXT DEFAULT 'pending',
+                verified_by TEXT,
+                verified_at TEXT,
+                assigned_to TEXT,
+                resolved_at TEXT,
+                report_source TEXT DEFAULT 'web',
+                gps_accuracy_m REAL,
+                duplicate_of TEXT,
+                building_id TEXT,
+                building_osm_id TEXT,
+                building_name TEXT,
+                building_address TEXT,
+                damage_level TEXT,
+                version INTEGER DEFAULT 1,
+                photo_path TEXT,
+                lat REAL,
+                lng REAL,
+                geom geometry(Point, 4326),
+                location_text TEXT,
+                infrastructure_type TEXT,
+                crisis_nature TEXT,
+                debris TEXT,
+                notes TEXT,
+                username TEXT,
+                timestamp TEXT,
+                is_current INTEGER DEFAULT 1,
+                synced INTEGER DEFAULT 1,
+                sms_number TEXT
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_geom ON reports USING GIST (geom)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (verification_status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_type ON reports (report_type)")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'viewer',
+                created_at TEXT,
+                phone_number TEXT
+            )
+        """)
+        default_users = [
+            ("admin",    hashlib.sha256("admin123".encode()).hexdigest(),  "admin",    "+1234567890"),
+            ("reporter", hashlib.sha256("report123".encode()).hexdigest(), "reporter", "+1234567891"),
+            ("viewer",   hashlib.sha256("view123".encode()).hexdigest(),   "viewer",   ""),
+        ]
+        for u in default_users:
+            await conn.execute("""
+                INSERT INTO users (username, password_hash, role, created_at, phone_number)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (username) DO NOTHING
+            """, u[0], u[1], u[2], datetime.now().isoformat(), u[3])
+    finally:
+        await conn.close()
 
-    <div class="main-layout">
-        <div class="sidebar" id="sidebarPanel">
-            <div class="card">
-                <h3><i class="fas fa-edit"></i> Submit Report</h3>
-                <div class="rt-tabs">
-                    <button class="rt-tab active" data-type="damage">🏚️ Damage</button>
-                    <button class="rt-tab" data-type="need">🆘 Need</button>
-                    <button class="rt-tab" data-type="hazard">⚠️ Hazard</button>
-                    <button class="rt-tab" data-type="status">✅ Status</button>
-                </div>
-                <div id="form-damage">
-                    <label>Damage Level</label>
-                    <select id="damageLevel">
-                        <option value="minimal">Minimal / No Damage</option>
-                        <option value="partial">Partially Damaged</option>
-                        <option value="complete">Completely Damaged</option>
-                    </select>
-                    <label>Infrastructure</label>
-                    <select id="infrastructureType">
-                        <option value="residential">Residential</option>
-                        <option value="commercial">Commercial</option>
-                        <option value="government">Government</option>
-                        <option value="utility">Utility</option>
-                        <option value="transport">Transport</option>
-                        <option value="community">Community</option>
-                        <option value="public">Public</option>
-                    </select>
-                    <label>Building Name</label>
-                    <input type="text" id="buildingName" placeholder="e.g., City Hall">
-                </div>
-                <div id="form-need" style="display:none;">
-                    <label>Need Type</label>
-                    <select id="needType">
-                        <option value="medical">Medical</option>
-                        <option value="water">Water</option>
-                        <option value="food">Food</option>
-                        <option value="shelter">Shelter</option>
-                        <option value="rescue">Rescue / Trapped</option>
-                        <option value="clothing">Clothing</option>
-                        <option value="sanitation">Sanitation</option>
-                    </select>
-                    <label>People Affected</label>
-                    <input type="number" id="peopleAffected" placeholder="0">
-                </div>
-                <div id="form-hazard" style="display:none;">
-                    <label>Hazard Type</label>
-                    <select id="hazardType">
-                        <option value="fire">Fire</option>
-                        <option value="flood">Flood</option>
-                        <option value="structural">Structural Collapse</option>
-                        <option value="gas">Gas Leak</option>
-                        <option value="powerline">Downed Power Line</option>
-                        <option value="road">Road Blocked</option>
-                        <option value="chemical">Chemical Hazard</option>
-                    </select>
-                </div>
-                <div id="form-status" style="display:none;">
-                    <label>Status Update</label>
-                    <select id="statusType">
-                        <option value="road_open">Road Reopened</option>
-                        <option value="shelter_open">Shelter Open</option>
-                        <option value="power_restored">Power Restored</option>
-                        <option value="water_restored">Water Restored</option>
-                        <option value="resolved">Incident Resolved</option>
-                    </select>
-                </div>
-                <label>Severity</label>
-                <select id="severity">
-                    <option value="low">Low</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical — life threatening</option>
-                </select>
-                <label>Crisis Context</label>
-                <select id="crisisNature">
-                    <option value="earthquake">Earthquake</option>
-                    <option value="flood">Flood</option>
-                    <option value="tsunami">Tsunami</option>
-                    <option value="hurricane">Hurricane</option>
-                    <option value="wildfire">Wildfire</option>
-                    <option value="explosion">Explosion</option>
-                    <option value="conflict">Conflict</option>
-                </select>
-                <label>Location</label>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="lat" placeholder="Latitude" readonly>
-                    <input type="text" id="lng" placeholder="Longitude" readonly>
-                </div>
-                <input type="hidden" id="gpsAccuracy">
-                <button class="secondary" onclick="shareLocation()" style="background:linear-gradient(135deg,#3498db,#2980b9);"><i class="fas fa-location-dot"></i> Use My GPS</button>
-                <input type="text" id="textLocation" placeholder="Or describe location" style="margin-top:6px;">
-                <label>Notes</label>
-                <textarea id="notes" rows="2" placeholder="Additional information"></textarea>
-                <label>Photo (optional)</label>
-                <input type="file" id="photo" accept="image/*" capture="environment">
-                <div id="photoPreview" style="text-align:center;margin-top:6px;"></div>
-                <button class="primary" onclick="submitReport()"><i class="fas fa-paper-plane"></i> Submit Report</button>
-                <div id="submitStatus" style="margin-top:8px; font-size:0.82rem; text-align:center;"></div>
-            </div>
-            <div class="card">
-                <h3><i class="fas fa-sms"></i> SMS Fallback</h3>
-                <input type="text" id="smsText" placeholder="Format: DAMAGE LAT LNG">
-                <input type="text" id="smsNumber" placeholder="Phone (optional)" style="margin-top:6px;">
-                <button class="secondary" onclick="sendSMSReport()"><i class="fas fa-envelope"></i> Send SMS Report</button>
-                <div id="smsStatus" style="margin-top:6px; font-size:0.82rem;"></div>
-            </div>
-            <div class="card">
-                <h3><i class="fas fa-list"></i> Recent Reports</h3>
-                <div id="reportsList" class="reports-list">Loading...</div>
-            </div>
-            <div class="card" id="triageCard" style="display:none;">
-                <h3><i class="fas fa-tasks"></i> Triage Queue <span id="triageCount" style="background:#f39c12;color:#000;font-size:0.7rem;padding:2px 8px;border-radius:10px;margin-left:6px;">0</span></h3>
-                <div id="triageList"></div>
-            </div>
-        </div>
-        <div class="right-panel">
-            <div class="map-container"><div id="map"></div></div>
-            <div class="charts-section">
-                <div class="charts-title">Report Analytics</div>
-                <div class="charts-grid">
-                    <div class="chart-container"><h4>By Type</h4><canvas id="typeChart"></canvas></div>
-                    <div class="chart-container"><h4>By Severity</h4><canvas id="severityChart"></canvas></div>
-                    <div class="chart-container"><h4>7-Day Trend</h4><canvas id="trendChart"></canvas></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div id="analyticsTab">
-    <div class="analytics-filter">
-        <label style="color:#8a93a6;font-size:0.85rem;">Date Range:</label>
-        <select id="analyticsDays" onchange="loadAdminStats()" style="width:auto;">
-            <option value="7">Last 7 days</option>
-            <option value="30" selected>Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="0">All time</option>
-        </select>
-        <button class="btn" onclick="loadAdminStats()"><i class="fas fa-sync"></i> Refresh</button>
-        <button class="btn" onclick="loadResearchMetrics()" style="background:linear-gradient(135deg,#2ecc71,#27ae60);color:#fff;"><i class="fas fa-flask"></i> Research Metrics</button>
-    </div>
-    <div class="grid-4">
-        <div class="stat-card"><div class="value" id="totalReports">-</div><div class="label">Total Reports</div></div>
-        <div class="stat-card"><div class="value" id="totalUsers">-</div><div class="label">Active Reporters</div></div>
-        <div class="stat-card"><div class="value" id="topReporter">-</div><div class="label">Top Reporter</div></div>
-        <div class="stat-card"><div class="value" id="avgLatency">-</div><div class="label">Mean Verification Latency (min)</div></div>
-    </div>
-    <div class="grid-2">
-        <div class="analytics-card"><h3>Daily Trend</h3><canvas id="adminTrendChart"></canvas></div>
-        <div class="analytics-card"><h3
+_db_initialized = False
+async def init_db_once():
+    global _db_initialized
+    if not _db_initialized:
+        await ensure_tables()
+        _db_initialized = True
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await init_db_once()
+        print("Database connected.")
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+    yield
+
+
+# CRITICAL: redirect_slashes=False fixes the Vercel 404 trailing-slash loop
+app = FastAPI(title=APP_TITLE, version=APP_VERSION,
+              lifespan=lifespan, redirect_slashes=False)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def get_building_at_location(lat: float, lng: float):
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json];
+        (
+          way["building"](around:10,{lat},{lng});
+          relation["building"](around:10,{lat},{lng});
+        );
+        out body;
+        >;
+        out skel qt;
+        """
+        params = urllib.parse.urlencode({'data': query}).encode()
+        req = urllib.request.Request(overpass_url, data=params,
+                                     headers={'User-Agent': 'GeoReport-DR/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            for element in data.get("elements", []):
+                if element.get("type") in ["way", "relation"]:
+                    tags = element.get("tags", {})
+                    return {
+                        "osm_id": f"{element['type']}/{element['id']}",
+                        "name": tags.get("name", ""),
+                        "building_type": tags.get("building", "yes"),
+                        "address": f"{tags.get('addr:street', '')} {tags.get('addr:housenumber', '')}".strip()
+                    }
+    except Exception as e:
+        print(f"OSM lookup error: {e}")
+    return None
+
+
+async def save_report(
+    report_uuid: str, building_id: str, building_osm_id: str,
+    building_name: str, building_address: str,
+    damage_level: str, lat: float, lng: float,
+    location_text: str, photo_path: str,
+    infrastructure_type: str, crisis_nature: str,
+    debris: str, notes: str, username: str,
+    synced: int = 1, sms_number: str = "",
+    report_type: str = "damage", severity: str = "medium",
+    report_source: str = "web", gps_accuracy_m: float = None
+):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        await conn.execute("""
+            INSERT INTO reports (
+                report_uuid, building_id, building_osm_id, building_name, building_address,
+                damage_level, version, lat, lng, geom, location_text, photo_path,
+                infrastructure_type, crisis_nature, debris, notes, username,
+                timestamp, is_current, synced, sms_number,
+                report_type, severity, report_source, gps_accuracy_m
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                CASE WHEN $9 IS NOT NULL AND $8 IS NOT NULL AND $9 != 0 AND $8 != 0
+                     THEN ST_SetSRID(ST_MakePoint($9, $8), 4326)
+                     ELSE NULL
+                END,
+                $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                $21, $22, $23, $24
+            )
+        """, report_uuid, building_id, building_osm_id, building_name, building_address,
+           damage_level, 1, lat, lng, location_text, photo_path,
+           infrastructure_type, crisis_nature, debris, notes, username,
+           datetime.now().isoformat(), 1, synced, sms_number,
+           report_type, severity, report_source, gps_accuracy_m)
+    finally:
+        await conn.close()
+
+
+async def get_reports_db(limit: int = 200):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, report_type, severity, verification_status,
+                   damage_level, lat, lng, location_text, infrastructure_type,
+                   building_name, building_address, crisis_nature, debris,
+                   notes, timestamp, username, photo_path, gps_accuracy_m
+            FROM reports WHERE is_current = 1
+            ORDER BY timestamp DESC LIMIT $1
+        """, limit)
+        return [{
+            "report_uuid": r[0], "report_type": r[1], "severity": r[2],
+            "verification_status": r[3], "damage_level": r[4],
+            "lat": r[5], "lng": r[6], "location_text": r[7] or "",
+            "infrastructure_type": r[8], "building_name": r[9] or "",
+            "building_address": r[10] or "", "crisis_nature": r[11],
+            "debris": r[12], "notes": r[13] or "", "timestamp": r[14],
+            "username": r[15],
+            "photo_url": f"/photos/{os.path.basename(r[16])}" if r[16] else None,
+            "gps_accuracy_m": r[17]
+        } for r in rows]
+    finally:
+        await conn.close()
+
+
+async def get_user_by_username(username: str):
+    conn = await get_db_conn()
+    try:
+        return await conn.fetchrow(
+            "SELECT password_hash, role FROM users WHERE username = $1", username)
+    finally:
+        await conn.close()
+
+
+async def get_admin_stats(days: int = 30):
+    await init_db_once()
+    conn = await get_db_conn()
+    try:
+        date_filter = ""
+        if days > 0:
+            date_filter = f"AND timestamp::timestamp >= (NOW() - INTERVAL '{days} days')"
+        total_reports = await conn.fetchval(
+            f"SELECT COUNT(*) FROM reports WHERE is_current = 1 {date_filter}")
+        total_users = await conn.fetchval(
+            f"SELECT COUNT(DISTINCT username) FROM reports WHERE is_current = 1 {date_filter}")
+        top_reporters = await conn.fetch(f"""
+            SELECT username, COUNT(*) as reports FROM reports
+            WHERE is_current = 1 {date_filter}
+            GROUP BY username ORDER BY reports DESC LIMIT 10
+        """)
+        days_limit = min(days, 30) if days > 0 else 30
+        daily_trend = await conn.fetch(f"""
+            SELECT DATE(timestamp::timestamp) as date, COUNT(*) as count
+            FROM reports WHERE is_current = 1
+              AND timestamp::timestamp >= (NOW() - INTERVAL '{days_limit} days')
+            GROUP BY DATE(timestamp::timestamp) ORDER BY date ASC
+        """)
+        by_damage = await conn.fetch(f"""
+            SELECT damage_level, COUNT(*) as count FROM reports
+            WHERE is_current = 1 {date_filter} GROUP BY damage_level
+        """)
+        by_infrastructure = await conn.fetch(f"""
+            SELECT infrastructure_type, COUNT(*) as count FROM reports
+            WHERE is_current = 1 AND infrastructure_type IS NOT NULL
+              AND infrastructure_type != '' {date_filter}
+            GROUP BY infrastructure_type ORDER BY count DESC LIMIT 10
+        """)
+        by_crisis = await conn.fetch(f"""
+            SELECT crisis_nature, COUNT(*) as count FROM reports
+            WHERE is_current = 1 AND crisis_nature IS NOT NULL
+              AND crisis_nature != '' {date_filter}
+            GROUP BY crisis_nature ORDER BY count DESC LIMIT 10
+        """)
+        by_type = await conn.fetch(f"""
+            SELECT report_type, COUNT(*) as count FROM reports
+            WHERE is_current = 1 {date_filter} GROUP BY report_type
+        """)
+        by_severity = await conn.fetch(f"""
+            SELECT severity, COUNT(*) as count FROM reports
+            WHERE is_current = 1 {date_filter} GROUP BY severity
+        """)
+        by_status = await conn.fetch(f"""
+            SELECT verification_status, COUNT(*) as count FROM reports
+            WHERE is_current = 1 {date_filter} GROUP BY verification_status
+        """)
+        return {
+            "total_reports": total_reports or 0,
+            "total_users": total_users or 0,
+            "top_reporters": [{"username": r[0], "reports": r[1]} for r in top_reporters],
+            "daily_trend": [{"date": r[0].isoformat(), "count": r[1]} for r in daily_trend],
+            "by_damage": [{"level": r[0] or "unknown", "count": r[1]} for r in by_damage],
+            "by_infrastructure": [{"type": r[0] or "unknown", "count": r[1]} for r in by_infrastructure],
+            "by_crisis": [{"crisis": r[0] or "unknown", "count": r[1]} for r in by_crisis],
+            "by_type": [{"type": r[0] or "unknown", "count": r[1]} for r in by_type],
+            "by_severity": [{"severity": r[0] or "unknown", "count": r[1]} for r in by_severity],
+            "by_status": [{"status": r[0] or "unknown", "count": r[1]} for r in by_status],
+        }
+    finally:
+        await conn.close()
+
+
+async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
+    await init_db_once()
+    row = await get_user_by_username(credentials.username)
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+    if password_hash != row[0]:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"username": credentials.username, "role": row[1]}
+
+
+def require_admin(current_user: dict = Depends(verify_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+def require_reporter(current_user: dict = Depends(verify_user)):
+    if current_user["role"] not in ["admin", "reporter"]:
+        raise HTTPException(status_code=403, detail="Reporter access required")
+    return current_user
+
+
+# ============================================
+# ROUTES — dual decorators (@"" and @"/") fix Vercel routing
+# ============================================
+@app.get("")
+@app.get("/")
+async def login_page():
+    return HTMLResponse(LOGIN_HTML)
+
+
+@app.get("/dashboard")
+async def dashboard(current_user: dict = Depends(verify_user)):
+    return HTMLResponse(DASHBOARD_HTML)
+
+
+@app.get("/api/current_user")
+async def get_current_user(current_user: dict = Depends(verify_user)):
+    return current_user
+
+
+@app.get("/api/building/{lat}/{lng}")
+async def get_building_info(lat: float, lng: float):
+    building = get_building_at_location(lat, lng)
+    return building if building else None
+
+
+@app.post("/api/report")
+async def create_report(
+    report_type: str = Form("damage"),
+    severity: str = Form("medium"),
+    damage_level: str = Form("minimal"),
+    infrastructure_type: str = Form("residential"),
+    building_name: str = Form(""),
+    building_address: str = Form(""),
+    building_osm_id: str = Form(""),
+    crisis_nature: str = Form("earthquake"),
+    debris: str = Form("no"),
+    text_location: str = Form(""),
+    lat: Optional[float] = Form(None),
+    lng: Optional[float] = Form(None),
+    gps_accuracy_m: Optional[float] = Form(None),
+    notes: str = Form(""),
+    sms_number: str = Form(""),
+    photo: UploadFile = File(None),
+    current_user: dict = Depends(require_reporter)
+):
+    photo_path = None
+    if photo and photo.filename:
+        ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
+        photo_filename = f"{datetime.now().timestamp()}_{current_user['username']}_{uuid.uuid4().hex[:6]}.{ext}"
+        photo_path = os.path.join(PHOTOS_DIR, photo_filename)
+        content = await photo.read()
+        with open(photo_path, "wb") as f:
+            f.write(content)
+    if lat is not None and lng is not None:
+        building_id = f"bld_{lat}_{lng}"
+    else:
+        building_id = f"bld_txt_{hashlib.md5(text_location.encode()).hexdigest()[:10]}"
+    report_uuid = str(uuid.uuid4())[:8]
+    await save_report(
+        report_uuid, building_id, building_osm_id, building_name, building_address,
+        damage_level, lat or 0, lng or 0, text_location, photo_path,
+        infrastructure_type, crisis_nature, debris, notes,
+        current_user['username'], 1, sms_number,
+        report_type=report_type, severity=severity,
+        report_source="web", gps_accuracy_m=gps_accuracy_m
+    )
+    return {"status": "success", "report_uuid": report_uuid, "lat": lat, "lng": lng}
+
+
+@app.post("/api/sms_report")
+async def sms_report(sms_text: str = Form(...), sms_number: str = Form("")):
+    parts = sms_text.upper().split()
+    if len(parts) >= 3:
+        damage_level = parts[0].lower()
+        try:
+            lat = float(parts[1]); lng = float(parts[2])
+            notes = " ".join(parts[3:]) if len(parts) > 3 else "SMS Report"
+            report_uuid = str(uuid.uuid4())[:8]
+            building_id = f"sms_{lat}_{lng}"
+            await save_report(
+                report_uuid, building_id, "", "", "",
+                damage_level, lat, lng, "", None,
+                "unknown", "earthquake", "no", notes,
+                "sms_user", 1, sms_number,
+                report_type="damage", severity="high", report_source="sms"
+            )
+            return {"status": "success", "message": "SMS report received",
+                    "lat": lat, "lng": lng}
+        except ValueError:
+            return {"status": "error", "message": "Invalid coordinates"}
+    return {"status": "error", "message": "Invalid SMS format. Use: DAMAGE_TYPE LAT LNG"}
+
+
+@app.post("/api/sync")
+async def sync_offline_reports(reports_data: List[Dict],
+                               current_user: dict = Depends(require_reporter)):
+    synced_count = 0
+    for report in reports_data:
+        try:
+            conn = await get_db_conn()
+            try:
+                existing = await conn.fetchval(
+                    "SELECT report_uuid FROM reports WHERE report_uuid = $1",
+                    report.get('report_uuid'))
+                if not existing:
+                    await conn.execute("""
+                        INSERT INTO reports (
+                            report_uuid, building_id, damage_level, lat, lng, geom,
+                            location_text, infrastructure_type, building_name,
+                            crisis_nature, debris, notes, username, timestamp,
+                            synced, is_current, report_type, severity, report_source
+                        )
+                        VALUES (
+                            $1, $2, $3, $4, $5,
+                            CASE WHEN $5 IS NOT NULL AND $4 IS NOT NULL AND $5 != 0 AND $4 != 0
+                                 THEN ST_SetSRID(ST_MakePoint($5, $4), 4326)
+                                 ELSE NULL
+                            END,
+                            $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                            $16, $17, $18
+                        )
+                    """, report.get('report_uuid'), report.get('building_id'),
+                        report.get('damage_level'), report.get('lat'), report.get('lng'),
+                        report.get('location_text'), report.get('infrastructure_type'),
+                        report.get('building_name'), report.get('crisis_nature'),
+                        report.get('debris'), report.get('notes'),
+                        current_user['username'], report.get('timestamp'),
+                        1, 1,
+                        report.get('report_type', 'damage'),
+                        report.get('severity', 'medium'),
+                        'offline')
+                    synced_count += 1
+            finally:
+                await conn.close()
+        except Exception as e:
+            print(f"Sync error: {e}")
+    return {"synced": synced_count}
+
+
+@app.get("/api/reports")
+async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
+    return await get_reports_db(limit)
+
+
+@app.get("/api/reports/pending")
+async def pending_reports(current_user: dict = Depends(require_reporter)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, report_type, damage_level, severity,
+                   lat, lng, notes, timestamp, username, photo_path, building_name
+            FROM reports
+            WHERE verification_status = 'pending' AND is_current = 1
+            ORDER BY
+              CASE severity WHEN 'critical' THEN 1
+                            WHEN 'high' THEN 2
+                            WHEN 'medium' THEN 3
+                            ELSE 4 END,
+              timestamp DESC
+        """)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+@app.post("/api/report/{report_uuid}/verify")
+async def verify_report(report_uuid: str, action: str = Form(...),
+                        current_user: dict = Depends(require_reporter)):
+    if action not in ["verified", "rejected", "assigned", "resolved"]:
+        raise HTTPException(status_code=400, detail="Invalid action")
+    conn = await get_db_conn()
+    try:
+        if action == "resolved":
+            await conn.execute("""
+                UPDATE reports SET verification_status = $1,
+                       resolved_at = $2, verified_by = $3
+                WHERE report_uuid = $4
+            """, action, datetime.now().isoformat(),
+                 current_user['username'], report_uuid)
+        else:
+            await conn.execute("""
+                UPDATE reports SET verification_status = $1,
+                       verified_by = $2, verified_at = $3
+                WHERE report_uuid = $4
+            """, action, current_user['username'],
+                 datetime.now().isoformat(), report_uuid)
+        return {"status": "ok", "action": action, "report_uuid": report_uuid}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/spatial/nearest")
+async def nearest_reports(lat: float, lng: float, k: int = 5,
+                          current_user: dict = Depends(verify_user)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, building_name, damage_level, report_type, severity,
+                   ST_Distance(geom::geography,
+                       ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_m
+            FROM reports WHERE is_current = 1 AND geom IS NOT NULL
+            ORDER BY geom <-> ST_SetSRID(ST_MakePoint($1, $2), 4326) LIMIT $3
+        """, lng, lat, k)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+@app.get("/api/spatial/within")
+async def reports_within(lat: float, lng: float, radius_m: int = 500,
+                         current_user: dict = Depends(verify_user)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, building_name, damage_level, report_type, severity,
+                   ST_Distance(geom::geography,
+                       ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_m
+            FROM reports
+            WHERE is_current = 1
+              AND ST_DWithin(geom::geography,
+                  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+            ORDER BY distance_m
+        """, lng, lat, radius_m)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+@app.get("/api/spatial/clusters")
+async def damage_clusters(eps_m: int = 100, min_points: int = 3,
+                          current_user: dict = Depends(verify_user)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            WITH clustered AS (
+                SELECT report_uuid, damage_level, severity, geom,
+                       ST_ClusterDBSCAN(geom, eps := $1 / 111320.0,
+                                        minpoints := $2) OVER () AS cluster_id
+                FROM reports WHERE is_current = 1 AND geom IS NOT NULL
+            )
+            SELECT cluster_id, COUNT(*) AS report_count,
+                   ST_Y(ST_Centroid(ST_Collect(geom))) AS center_lat,
+                   ST_X(ST_Centroid(ST_Collect(geom))) AS center_lng,
+                   SUM(CASE WHEN damage_level = 'complete' THEN 1 ELSE 0 END) AS complete_damage,
+                   SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) AS critical_count
+            FROM clustered WHERE cluster_id IS NOT NULL
+            GROUP BY cluster_id ORDER BY report_count DESC
+        """, eps_m, min_points)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+@app.get("/api/reports/geojson")
+async def get_geojson(current_user: dict = Depends(require_reporter)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT jsonb_build_object(
+                'type', 'Feature',
+                'geometry', ST_AsGeoJSON(geom)::jsonb,
+                'properties', jsonb_build_object(
+                    'report_uuid', report_uuid,
+                    'report_type', report_type,
+                    'severity', severity,
+                    'verification_status', verification_status,
+                    'building_name', building_name,
+                    'damage_level', damage_level,
+                    'infrastructure_type', infrastructure_type,
+                    'crisis_nature', crisis_nature,
+                    'timestamp', timestamp,
+                    'username', username
+                )
+            ) AS feature
+            FROM reports WHERE is_current = 1 AND geom IS NOT NULL
+        """)
+        features = [r["feature"] for r in rows]
+        return {"type": "FeatureCollection", "features": features}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/reports/csv")
+async def export_csv(current_user: dict = Depends(require_reporter)):
+    conn = await get_db_conn()
+    try:
+        rows = await conn.fetch("""
+            SELECT report_uuid, report_type, severity, verification_status,
+                   damage_level, lat, lng, building_name, building_address,
+                   infrastructure_type, crisis_nature, debris, notes,
+                   timestamp, username, gps_accuracy_m
+            FROM reports WHERE is_current = 1 ORDER BY timestamp DESC
+        """)
+        csv = ("report_uuid,report_type,severity,verification_status,damage_level,"
+               "latitude,longitude,building_name,building_address,"
+               "infrastructure_type,crisis_nature,debris,notes,timestamp,"
+               "username,gps_accuracy_m\n")
+        for r in rows:
+            lat_val = f"{r[5]:.6f}" if r[5] else ""
+            lng_val = f"{r[6]:.6f}" if r[6] else ""
+            acc_val = f"{r[15]:.1f}" if r[15] else ""
+            csv += (f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{lat_val},{lng_val},"
+                    f"\"{r[7] or ''}\",\"{r[8] or ''}\",{r[9]},{r[10]},{r[11]},"
+                    f"\"{r[12] or ''}\",{r[13]},{r[14]},{acc_val}\n")
+        return HTMLResponse(csv, media_type="text/csv",
+                            headers={"Content-Disposition":
+                                     "attachment; filename=georeport_dr_reports.csv"})
+    finally:
+        await conn.close()
+
+
+@app.get("/api/situation-report")
+async def situation_report(hours: int = 24,
+                           current_user: dict = Depends(require_reporter)):
+    conn = await get_db_conn()
+    try:
+        since = (datetime.now() - timedelta(hours=hours)).isoformat()
+        summary = await conn.fetchrow("""
+            SELECT
+              COUNT(*) FILTER (WHERE report_type='damage') AS damage_reports,
+              COUNT(*) FILTER (WHERE report_type='need')   AS need_reports,
+              COUNT(*) FILTER (WHERE report_type='hazard') AS hazard_reports,
+              COUNT(*) FILTER (WHERE report_type='status') AS status_reports,
+              COUNT(*) FILTER (WHERE severity='critical')  AS critical_count,
+              COUNT(*) FILTER (WHERE verification_status='verified') AS verified,
+              COUNT(*) FILTER (WHERE verification_status='resolved') AS resolved,
+              COUNT(*) AS total
+            FROM reports WHERE is_current=1 AND timestamp >= $1
+        """, since)
+        by_area = await conn.fetch("""
+            SELECT
+              ST_AsText(ST_SnapToGrid(geom, 0.01)) AS grid_cell,
+              COUNT(*) AS count,
+              SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END) AS critical
+            FROM reports
+            WHERE is_current=1 AND timestamp >= $1 AND geom IS NOT NULL
+            GROUP BY grid_cell ORDER BY count DESC LIMIT 20
+        """, since)
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "window_hours": hours,
+            "summary": dict(summary),
+            "hotspots": [dict(r) for r in by_area]
+        }
+    finally:
+        await conn.close()
+
+
+@app.get("/api/research/metrics")
+async def research_metrics(current_user: dict = Depends(require_admin)):
+    conn = await get_db_conn()
+    try:
+        latency = await conn.fetchval("""
+            SELECT AVG(EXTRACT(EPOCH FROM
+                (verified_at::timestamp - timestamp::timestamp))/60)
+            FROM reports WHERE verified_at IS NOT NULL
+        """)
+        completeness = await conn.fetchrow("""
+            SELECT
+              AVG(CASE WHEN photo_path IS NOT NULL THEN 1 ELSE 0 END) AS photo_rate,
+              AVG(CASE WHEN notes != '' THEN 1 ELSE 0 END) AS notes_rate,
+              AVG(CASE WHEN building_name != '' THEN 1 ELSE 0 END) AS name_rate
+            FROM reports WHERE is_current=1
+        """)
+        dup_rate = await conn.fetchval("""
+            SELECT COUNT(*) FROM (
+              SELECT a.report_uuid FROM reports a
+              JOIN reports b ON a.report_uuid < b.report_uuid
+                AND a.report_type = b.report_type
+                AND ST_DWithin(a.geom::geography, b.geom::geography, 20)
+              WHERE a.is_current=1 AND b.is_current=1
+            ) x
+        """)
+        gps = await conn.fetchrow("""
+            SELECT AVG(gps_accuracy_m) AS mean_accuracy,
+                   PERCENTILE_CONT(0.5) WITHIN GROUP
+                     (ORDER BY gps_accuracy_m) AS median_accuracy,
+                   COUNT(*) AS samples
+            FROM reports WHERE gps_accuracy_m IS NOT NULL
+        """)
+        return {
+            "mean_verification_latency_min": latency,
+            "photo_attachment_rate": completeness['photo_rate'],
+            "notes_completion_rate": completeness['notes_rate'],
+            "building_name_rate": completeness['name_rate'],
+            "duplicate_reports": dup_rate,
+            "gps_mean_accuracy_m": gps['mean_accuracy'],
+            "gps_median_accuracy_m": gps['median_accuracy'],
+            "gps_samples": gps['samples'],
+        }
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/stats")
+async def admin_stats(days: int = 7, current_user: dict = Depends(require_admin)):
+    return await get_admin_stats(days)
+
+
+@app.get("/photos/{filename}")
+async def serve_photo(filename: str):
+    file_path = os.path.join(PHOTOS_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Photo not found")
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
