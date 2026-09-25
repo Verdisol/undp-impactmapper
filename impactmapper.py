@@ -1,11 +1,7 @@
 """
-GeoReport-DR: A GIS-Based Crowdsourced Reporting Tool for Disaster Response
-Dissertation prototype — v1.0.0-dissertation
-
-Author: [Your Name]
-Institution: [Your University]
+GeoReport-DR: GIS-Based Crowdsourced Reporting Tool for Disaster Response
+v1.0.0-dissertation
 """
-
 from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,9 +18,8 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import asyncpg
 
-# ============================================
-# CONFIG
-# ============================================
+from templates import LOGIN_HTML, DASHBOARD_HTML
+
 PHOTOS_DIR = "/tmp/photos"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
@@ -42,9 +37,6 @@ async def get_db_conn():
     return await asyncpg.connect(DATABASE_URL)
 
 
-# ============================================
-# SCHEMA
-# ============================================
 async def ensure_tables():
     conn = await get_db_conn()
     try:
@@ -63,7 +55,6 @@ async def ensure_tables():
                 report_source TEXT DEFAULT 'web',
                 gps_accuracy_m REAL,
                 duplicate_of TEXT,
-
                 building_id TEXT,
                 building_osm_id TEXT,
                 building_name TEXT,
@@ -89,7 +80,6 @@ async def ensure_tables():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_geom ON reports USING GIST (geom)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (verification_status)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_type ON reports (report_type)")
-
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -127,13 +117,15 @@ async def init_db_once():
 async def lifespan(app: FastAPI):
     try:
         await init_db_once()
-        print("✅ Database connected and tables verified.")
+        print("Database connected.")
     except Exception as e:
-        print(f"❌ Database connection failed: {e}")
+        print(f"Database connection failed: {e}")
     yield
 
 
-app = FastAPI(title=APP_TITLE, version=APP_VERSION, lifespan=lifespan)
+app = FastAPI(title=APP_TITLE, version=APP_VERSION,
+              lifespan=lifespan, redirect_slashes=False)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -143,9 +135,6 @@ app.add_middleware(
 )
 
 
-# ============================================
-# OSM BUILDING LOOKUP
-# ============================================
 def get_building_at_location(lat: float, lng: float):
     try:
         overpass_url = "https://overpass-api.de/api/interpreter"
@@ -162,7 +151,7 @@ def get_building_at_location(lat: float, lng: float):
         params = urllib.parse.urlencode({'data': query}).encode()
         req = urllib.request.Request(overpass_url, data=params,
                                      headers={'User-Agent': 'GeoReport-DR/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode())
             for element in data.get("elements", []):
                 if element.get("type") in ["way", "relation"]:
@@ -178,9 +167,6 @@ def get_building_at_location(lat: float, lng: float):
     return None
 
 
-# ============================================
-# DATABASE FUNCTIONS
-# ============================================
 async def save_report(
     report_uuid: str, building_id: str, building_osm_id: str,
     building_name: str, building_address: str,
@@ -257,21 +243,6 @@ async def get_user_by_username(username: str):
         await conn.close()
 
 
-async def get_stats_db():
-    conn = await get_db_conn()
-    try:
-        total = await conn.fetchval("SELECT COUNT(*) FROM reports WHERE is_current = 1")
-        today = datetime.now().date().isoformat()
-        today_count = await conn.fetchval(
-            "SELECT COUNT(*) FROM reports WHERE DATE(timestamp) = $1 AND is_current = 1", today)
-        pending = await conn.fetchval(
-            "SELECT COUNT(*) FROM reports WHERE verification_status = 'pending' AND is_current = 1")
-        return {"total_reports": total, "today_reports": today_count,
-                "pending_verification": pending}
-    finally:
-        await conn.close()
-
-
 async def get_admin_stats(days: int = 30):
     await init_db_once()
     conn = await get_db_conn()
@@ -339,9 +310,6 @@ async def get_admin_stats(days: int = 30):
         await conn.close()
 
 
-# ============================================
-# AUTH
-# ============================================
 async def verify_user(credentials: HTTPBasicCredentials = Depends(security)):
     await init_db_once()
     row = await get_user_by_username(credentials.username)
@@ -365,9 +333,7 @@ def require_reporter(current_user: dict = Depends(verify_user)):
     return current_user
 
 
-# ============================================
-# ROUTES
-# ============================================
+@app.get("")
 @app.get("/")
 async def login_page():
     return HTMLResponse(LOGIN_HTML)
@@ -389,7 +355,6 @@ async def get_building_info(lat: float, lng: float):
     return building if building else None
 
 
-# --- Report submission ---
 @app.post("/api/report")
 async def create_report(
     report_type: str = Form("damage"),
@@ -418,12 +383,10 @@ async def create_report(
         content = await photo.read()
         with open(photo_path, "wb") as f:
             f.write(content)
-
     if lat is not None and lng is not None:
         building_id = f"bld_{lat}_{lng}"
     else:
         building_id = f"bld_txt_{hashlib.md5(text_location.encode()).hexdigest()[:10]}"
-
     report_uuid = str(uuid.uuid4())[:8]
     await save_report(
         report_uuid, building_id, building_osm_id, building_name, building_address,
@@ -436,7 +399,6 @@ async def create_report(
     return {"status": "success", "report_uuid": report_uuid, "lat": lat, "lng": lng}
 
 
-# --- SMS fallback ---
 @app.post("/api/sms_report")
 async def sms_report(sms_text: str = Form(...), sms_number: str = Form("")):
     parts = sms_text.upper().split()
@@ -461,7 +423,6 @@ async def sms_report(sms_text: str = Form(...), sms_number: str = Form("")):
     return {"status": "error", "message": "Invalid SMS format. Use: DAMAGE_TYPE LAT LNG"}
 
 
-# --- Offline sync ---
 @app.post("/api/sync")
 async def sync_offline_reports(reports_data: List[Dict],
                                current_user: dict = Depends(require_reporter)):
@@ -508,7 +469,6 @@ async def sync_offline_reports(reports_data: List[Dict],
     return {"synced": synced_count}
 
 
-# --- Read ---
 @app.get("/api/reports")
 async def get_reports(limit: int = 200, current_user: dict = Depends(verify_user)):
     return await get_reports_db(limit)
@@ -535,11 +495,9 @@ async def pending_reports(current_user: dict = Depends(require_reporter)):
         await conn.close()
 
 
-# --- Verification workflow ---
 @app.post("/api/report/{report_uuid}/verify")
 async def verify_report(report_uuid: str, action: str = Form(...),
                         current_user: dict = Depends(require_reporter)):
-    """action: verified | rejected | assigned | resolved"""
     if action not in ["verified", "rejected", "assigned", "resolved"]:
         raise HTTPException(status_code=400, detail="Invalid action")
     conn = await get_db_conn()
@@ -563,7 +521,6 @@ async def verify_report(report_uuid: str, action: str = Form(...),
         await conn.close()
 
 
-# --- Spatial queries ---
 @app.get("/api/spatial/nearest")
 async def nearest_reports(lat: float, lng: float, k: int = 5,
                           current_user: dict = Depends(verify_user)):
@@ -626,7 +583,6 @@ async def damage_clusters(eps_m: int = 100, min_points: int = 3,
         await conn.close()
 
 
-# --- Exports ---
 @app.get("/api/reports/geojson")
 async def get_geojson(current_user: dict = Depends(require_reporter)):
     conn = await get_db_conn()
@@ -685,7 +641,6 @@ async def export_csv(current_user: dict = Depends(require_reporter)):
         await conn.close()
 
 
-# --- Situation Report (dissertation deliverable) ---
 @app.get("/api/situation-report")
 async def situation_report(hours: int = 24,
                            current_user: dict = Depends(require_reporter)):
@@ -723,7 +678,6 @@ async def situation_report(hours: int = 24,
         await conn.close()
 
 
-# --- Research metrics (dissertation evaluation) ---
 @app.get("/api/research/metrics")
 async def research_metrics(current_user: dict = Depends(require_admin)):
     conn = await get_db_conn()
@@ -770,11 +724,6 @@ async def research_metrics(current_user: dict = Depends(require_admin)):
         await conn.close()
 
 
-@app.get("/api/stats")
-async def get_stats():
-    return await get_stats_db()
-
-
 @app.get("/api/admin/stats")
 async def admin_stats(days: int = 7, current_user: dict = Depends(require_admin)):
     return await get_admin_stats(days)
@@ -786,22 +735,6 @@ async def serve_photo(filename: str):
     if os.path.exists(file_path):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Photo not found")
-
-
-# ============================================
-# HTML (imported from templates.py)
-# ============================================
-from templates import LOGIN_HTML, DASHBOARD_HTML
-
-
-# ============================================
-# VERCEL HANDLER
-# ============================================
-try:
-    from mangum import Mangum
-    handler = Mangum(app)
-except ImportError:
-    pass
 
 
 if __name__ == "__main__":
