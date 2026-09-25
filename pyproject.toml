@@ -1,0 +1,13 @@
+[project]
+name = "georeport-dr"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "asyncpg",
+    "python-multipart",
+]
+
+[tool.vercel]
+entrypoint = "main:app"
